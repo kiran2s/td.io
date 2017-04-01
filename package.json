@@ -1,6 +1,5 @@
 {
 	"name": "td-io",
 	"version": "0.0.1",
-	"description": "Tower Defense IO Game",
-	"dependencies": {}
+	"description": "Tower Defense io Game"
 }
