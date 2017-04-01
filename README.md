@@ -20,7 +20,7 @@ Go to localhost:4004
 ```
 $ browserify client/index.js -o bundle.js
 ```
-#### Step 6: Play
+#### Step 6: Run Server
 ```
 $ node server/Server.js
 ```
