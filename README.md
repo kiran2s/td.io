@@ -2,7 +2,7 @@
 
 Tower Defense io game.
 
-### To Play
+## To Play
 #### Step 1: Run Server
 ```
 $ node server/Server.js
@@ -11,22 +11,16 @@ $ node server/Server.js
 #### Step 2: Open in Browser
 Go to localhost:4004
 
-### To Setup
-Step 1: Install Node.js
-
-Step 2: Install Express
-
-Step 3: Install Socket.IO
-
-Step 4: Install Browserify
-
-Step 5: Bundle required modules with Browserify
-
+## To Setup
+#### Step 1: Install Node.js
+#### Step 2: Install Express
+#### Step 3: Install Socket.IO
+#### Step 4: Install Browserify
+#### Step 5: Bundle required modules with Browserify
 ```
 $ browserify client/index.js -o bundle.js
 ```
-Step 6: Play
-
+#### Step 6: Play
 ```
 $ node server/Server.js
 ```
