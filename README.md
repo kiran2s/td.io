@@ -2,15 +2,6 @@
 
 Tower Defense io game.
 
-## To Play
-#### Step 1: Run Server
-```
-$ node server/Server.js
-```
-
-#### Step 2: Open in Browser
-Go to localhost:4004
-
 ## To Setup
 #### Step 1: Install Node.js
 #### Step 2: Install Express
@@ -24,3 +15,5 @@ $ browserify client/index.js -o bundle.js
 ```
 $ node server/Server.js
 ```
+#### Step 7: Open in Browser
+Go to localhost:4004
