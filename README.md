@@ -2,7 +2,7 @@
 
 Tower Defense io game.
 
-## To Setup
+## Environment Setup
 #### Step 1: Install Node.js
 #### Step 2: Install Express
 #### Step 3: Install Socket.IO
