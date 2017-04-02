@@ -45,11 +45,11 @@ class Client {
 			keys += 'D';
 		}
 		
-		var mousePos = new Vector2D(this.mouse.x, this.mouse.y);
+		let mousePos = new Vector2D(this.mouse.x, this.mouse.y);
 		
-		var mouseLeftButtonDown = this.mouse.isLeftButtonDown;
+		let mouseLeftButtonDown = this.mouse.isLeftButtonDown;
 		
-		var input = {
+		let input = {
 			keysPressed: keys,
 			mousePosition: mousePos,
 			isMouseLeftButtonDown: mouseLeftButtonDown
@@ -77,7 +77,7 @@ class Client {
 
 module.exports = Client;
 
-},{"../lib/MouseState":3,"../lib/THREEx.KeyboardState":5,"../lib/Vector2D":6,"../shared/GameState":9}],2:[function(require,module,exports){
+},{"../lib/MouseState":3,"../lib/THREEx.KeyboardState":5,"../lib/Vector2D":6,"../shared/GameState":11}],2:[function(require,module,exports){
 'use strict';
 
 var Client = require('./Client');
@@ -90,19 +90,13 @@ new Client().run();
 
 'use strict';
 
-class MouseState {
+class MouseState {	
 	constructor() {
 		this.x = 0;
 		this.y = 0;
 		this.isLeftButtonDown = false;
 		this.isScrollButtonDown = false;
 		this.isRightButtonDown = false;
-		
-		this.buttonCodes = {
-			left : 0,
-			scroll : 1,
-			right : 2
-		};
 		
 		document.onmousemove = this.onMouseMove.bind(this);
 		document.onmousedown = this.onMouseDown.bind(this);
@@ -118,13 +112,13 @@ class MouseState {
 	onMouseDown(event) {
 		event = event || window.event;
 		
-		if (event.button === this.buttonCodes.left) {
+		if (event.button === MouseState.buttonCodes.left) {
 			this.isLeftButtonDown = true;
 		}
-		else if (event.button === this.buttonCodes.scroll) {
+		else if (event.button === MouseState.buttonCodes.scroll) {
 			this.isScrollButtonDown = true;
 		}
-		else if (event.button === this.buttonCodes.right) {
+		else if (event.button === MouseState.buttonCodes.right) {
 			this.isRightButtonDown = true;
 		}
 	}
@@ -132,17 +126,23 @@ class MouseState {
 	onMouseUp(event) {
 		event = event || window.event;
 		
-		if (event.button === this.buttonCodes.left) {
+		if (event.button === MouseState.buttonCodes.left) {
 			this.isLeftButtonDown = false;
 		}
-		else if (event.button === this.buttonCodes.scroll) {
+		else if (event.button === MouseState.buttonCodes.scroll) {
 			this.isScrollButtonDown = false;
 		}
-		else if (event.button === this.buttonCodes.right) {
+		else if (event.button === MouseState.buttonCodes.right) {
 			this.isRightButtonDown = false;
 		}
 	}
 }
+
+MouseState.buttonCodes = {
+	left : 0,
+	scroll : 1,
+	right : 2
+};
 
 module.exports = MouseState;
 
@@ -336,16 +336,35 @@ class Vector2D {
 module.exports = Vector2D;
 
 },{}],7:[function(require,module,exports){
+module.exports = {
+	none: '',
+	up: 'W',
+	left: 'A',
+	down: 'S',
+	right: 'D',
+	up_left: 'WA',
+	up_right: 'WD',
+	down_left: 'AS',
+	down_right: 'SD'
+};
+
+},{}],8:[function(require,module,exports){
 'use strict'
 
+var GameObject = require('./GameObject');
 var Rectangle = require('../lib/Rectangle');
+var Vector2D = require('../lib/Vector2D');
 
-class Bullet {
-	constructor(velocity, position, radius = 7, color = "black") {
-		this.velocity = velocity;
-		this.position = position;
+class Bullet extends GameObject {
+	constructor(velocity, position, radius = 7, color = "black", outlineColor = 'rgba(80,80,80,1)') {
+		super(velocity, position, radius*2, color);
 		this.radius = radius;
-		this.color = color;
+		this.outlineColor = outlineColor;
+	}
+	
+	update(deltaTime) {
+		let adjustedBulletVelocity = new Vector2D().copy(this.velocity).mul(deltaTime);
+		this.position.add(adjustedBulletVelocity);
 	}
 	
 	draw(ctx) {
@@ -354,33 +373,31 @@ class Bullet {
 		ctx.arc(this.position.x, this.position.y, this.radius, 0, 2*Math.PI);
 		ctx.fillStyle = this.color;
 		ctx.fill();
-	}
-	
-	getHitBox() {
-		return new Rectangle(
-			this.position.x - this.radius,
-			this.position.y - this.radius,
-			this.radius * 2,
-			this.radius * 2
-		);
+		ctx.strokeStyle = this.outlineColor;
+		ctx.lineWidth = 2;
+		ctx.stroke();
 	}
 }
 
 module.exports = Bullet;
 
-},{"../lib/Rectangle":4}],8:[function(require,module,exports){
+},{"../lib/Rectangle":4,"../lib/Vector2D":6,"./GameObject":10}],9:[function(require,module,exports){
 'use strict';
 
+var GameObject = require('./GameObject');
 var Rectangle = require('../lib/Rectangle');
+var Vector2D = require('../lib/Vector2D');
 
-class Collectible {
+class Collectible extends GameObject {
 	constructor(position) {
-		this.position = position;
+		super(new Vector2D(0, 0), position, 20, "orange");
 		this.orientation = 0;
-		this.rotationSpeed = 0.02;
-		this.size = 20;
-		this.color = "orange";
+		this.rotationSpeed = 2;
 		this.outlineColor = 'rgba(80,80,80,1)';
+	}
+	
+	update(deltaTime) {
+		this.orientation += this.rotationSpeed * deltaTime;
 	}
 	
 	draw(ctx) {
@@ -394,6 +411,35 @@ class Collectible {
 		ctx.lineWidth = 3;
 		ctx.strokeRect(0, 0, this.size, this.size);
 	}
+}
+
+module.exports = Collectible;
+
+},{"../lib/Rectangle":4,"../lib/Vector2D":6,"./GameObject":10}],10:[function(require,module,exports){
+'use strict';
+
+var Rectangle = require('../lib/Rectangle');
+
+/* Abstract */
+class GameObject {
+	constructor(velocity, position, size, color) {
+		if (this.constructor === GameObject) {
+			throw new Error("Attempt to instantiate abstract class GameObject.");
+		}
+		
+		this.velocity = velocity;
+		this.position = position;
+		this.size = size;
+		this.color = color;
+	}
+	
+	update(deltaTime) {
+		throw new Error("Abstract method called: GameObject.prototype.update().");
+	}
+	
+	draw(ctx) {
+		throw new Error("Abstract method called: GameObject.prototype.draw().");
+	}
 	
 	getHitBox() {
 		return new Rectangle(
@@ -405,19 +451,21 @@ class Collectible {
 	}
 }
 
-module.exports = Collectible;
+module.exports = GameObject;
 
-},{"../lib/Rectangle":4}],9:[function(require,module,exports){
+},{"../lib/Rectangle":4}],11:[function(require,module,exports){
 'use strict';
 
 var Player = require('./Player');
 var Collectible = require('./Collectible');
 var Vector2D = require('../lib/Vector2D');
 
-class GameState {
+class GameState {	
 	constructor(worldWidth, worldHeight) {
 		this.worldWidth = worldWidth;
 		this.worldHeight = worldHeight;
+		
+		GameState.directionalInputCodes;
 		
 		this.player = new Player(
 			new Vector2D(0, 0),
@@ -428,134 +476,79 @@ class GameState {
 		this.bullets = [];
 		this.collectibles = [];
 		
-		for (var i = 0; i < 20; i++) {
-			var cX = Math.floor(Math.random() * worldWidth);
-			var cY = Math.floor(Math.random() * worldHeight);
+		for (let i = 0; i < 20; i++) {
+			let cX = Math.floor(Math.random() * worldWidth);
+			let cY = Math.floor(Math.random() * worldHeight);
 			this.collectibles.push(new Collectible(new Vector2D(cX, cY)));
 		}
 		
-		this.diagAccelFactor = Math.cos(Math.PI/4);
 		this.prevTime = Date.now();
 	}
 	
-	update(input) {	
-		var i;
-	
-		// PLAYER
-		var acceleration = new Vector2D(0, 0);
-		if (input.keysPressed.length === 2) {
-			var axisAcceleration = this.player.acceleration * this.diagAccelFactor;
-			if (input.keysPressed === "WA") {
-				acceleration.set(-axisAcceleration, -axisAcceleration);
-			}
-			else if (input.keysPressed === "AS") {
-				acceleration.set(-axisAcceleration, axisAcceleration);
-			}
-			else if (input.keysPressed === "SD") {
-				acceleration.set(axisAcceleration, axisAcceleration);
-			}
-			else if (input.keysPressed === "WD") {
-				acceleration.set(axisAcceleration, -axisAcceleration);
-			}
-		}
-		else {
-			if (input.keysPressed === "W") {
-				acceleration.y = -this.player.acceleration; 
-			}
-			else if (input.keysPressed === "A") {
-				acceleration.x = -this.player.acceleration;
-			}
-			else if (input.keysPressed === "S") {
-				acceleration.y = this.player.acceleration;
-			}
-			else if (input.keysPressed === "D") {
-				acceleration.x = this.player.acceleration;
-			}
-			else {
-				if (this.player.velocity.getLength() < this.player.minSpeed) {
-					this.player.velocity.set(0, 0);
-				}
-				else {
-					acceleration.copy(this.player.velocity)
-								.setLength(this.player.deceleration)
-								.neg();	
-				}
-			}	
-		}
-		
-		this.player.velocity.add(acceleration);
-		if (this.player.velocity.getLength() > this.player.maxSpeed) {
-			this.player.velocity.setLength(this.player.maxSpeed);
-		}
-		
-		var currTime = Date.now();
-		var deltaTime = (currTime - this.prevTime) / 1000;
+	update(input) {
+		let currTime = Date.now();
+		let deltaTime = (currTime - this.prevTime) / 1000;
 		this.prevTime = currTime;
 		
-		var adjustedPlayerVelocity = new Vector2D().copy(this.player.velocity).mul(deltaTime);
-		this.player.position.add(adjustedPlayerVelocity);
+		this.updatePlayer(input, deltaTime);
+		this.updateBullets(input, deltaTime);
+		this.updateCollectibles(deltaTime);
+		this.detectCollisions();
+	}
+	
+	draw(ctx) {		
+		this.player.draw(ctx);
+		for (let i = 0; i < this.bullets.length; i++) {
+			this.bullets[i].draw(ctx);
+		}
+		for (let i = 0; i < this.collectibles.length; i++) {
+			this.collectibles[i].draw(ctx);
+		}
+	}
+	
+	updatePlayer(input, deltaTime) {
+		let adjustedPlayerVelocity = this.player.update(
+			deltaTime, 
+			input.keysPressed, 
+			input.mousePosition
+		);
 		if (!this.isWithinGameWorld(this.player.position)) {
 			this.player.position.sub(adjustedPlayerVelocity);
 			this.player.velocity.set(0, 0);
 		}
-		
-		var weaponDirection = new Vector2D(input.mousePosition.x, input.mousePosition.y).sub(this.player.position);
-		if (weaponDirection.x !== 0) {
-			this.player.orientation = Math.atan2(weaponDirection.y, weaponDirection.x);
-		}
-		
-		// BULLETS
+	}
+	
+	updateBullets(input, deltaTime) {
 		if (input.isMouseLeftButtonDown) {
-			var bulletPosition = new Vector2D().copy(this.player.position);
-			weaponDirection.setLength(this.player.radius + this.player.weapon.size);
-			bulletPosition.add(weaponDirection);
-			var newBullet = this.player.weapon.fire(
-				weaponDirection,
-				bulletPosition
-			);
+			let newBullet = this.player.fireWeapon();
 			if (newBullet !== null) {
 				this.bullets.push(newBullet);
 			}
 		}
 		
-		for (i = 0; i < this.bullets.length; i++) {
-			var bullet = this.bullets[i];
+		for (let i = 0; i < this.bullets.length; i++) {
+			let bullet = this.bullets[i];
 			if (this.isWithinGameWorld(bullet.position)) {
-				var adjustedBulletVelocity = new Vector2D().copy(bullet.velocity).mul(deltaTime);
-				bullet.position.add(adjustedBulletVelocity);
+				bullet.update(deltaTime);
 			}
 			else {
 				this.bullets.splice(i, 1);
 				i--;
 			}
 		}
-		
-		// COLLECTIBLES
-		for (i = 0; i < this.collectibles.length; i++) {
-			var collectible = this.collectibles[i];
-			collectible.orientation += collectible.rotationSpeed;
-		}
-		
-		this.detectCollisions();
 	}
 	
-	draw(ctx) {
-		var i;
-		
-		this.player.draw(ctx);
-		for (i = 0; i < this.bullets.length; i++) {
-			this.bullets[i].draw(ctx);
-		}
-		for (i = 0; i < this.collectibles.length; i++) {
-			this.collectibles[i].draw(ctx);
+	updateCollectibles(deltaTime) {
+		for (let i = 0; i < this.collectibles.length; i++) {
+			this.collectibles[i].update(deltaTime);
 		}
 	}
 	
 	detectCollisions() {
-		for (var i = 0; i < this.bullets.length; i++) {
-			var bulletHitBox = this.bullets[i].getHitBox();
-			for (var j = 0; j < this.collectibles.length; j++) {
-				var collectibleHitBox = this.collectibles[j].getHitBox();
+		for (let i = 0; i < this.bullets.length; i++) {
+			let bulletHitBox = this.bullets[i].getHitBox();
+			for (let j = 0; j < this.collectibles.length; j++) {
+				let collectibleHitBox = this.collectibles[j].getHitBox();
 				if (bulletHitBox.intersects(collectibleHitBox)) {
 					this.collectibles.splice(j, 1);
 					j--;
@@ -572,30 +565,87 @@ class GameState {
 
 module.exports = GameState;
 
-},{"../lib/Vector2D":6,"./Collectible":8,"./Player":10}],10:[function(require,module,exports){
+},{"../lib/Vector2D":6,"./Collectible":9,"./Player":12}],12:[function(require,module,exports){
 'use strict';
 
-var Weapon = require('./Weapon');
+var GameObject = require('./GameObject');
+var WeaponFactory = require('./Weapon').WeaponFactory;
 var Rectangle = require('../lib/Rectangle');
+var Vector2D = require('../lib/Vector2D');
+var directionalInputCodes = require('../lib/directionalInputCodes');
 
-class Player {
+var DIAG_ACCEL_FACTOR = Math.cos(Math.PI/4);
+var DEGREES_90 = Math.PI/2;
+var DEGREES_270 = 3*Math.PI/2;
+
+class Player extends GameObject {
 	constructor(velocity, position, color) {
-		this.velocity = velocity;
-		this.position = position;
-		this.color = color;
-		this.outlineColor = 'rgba(80,80,80,1)';
-		
+		super(velocity, position, 40, color);
+
+		this.outlineColor = 'rgba(80,80,80,1)';		
 		this.acceleration = 7;
 		this.deceleration = 3;
 		this.maxSpeed = 225;
 		this.minSpeed = 5;
-		this.radius = 20;
-		this.orientation = 0;
-		this.degreesToRadians = Math.PI/180;
-		
-		this.weapon = new Weapon(this.radius);
-		
+		this.radius = this.size/2;
+		this.direction = new Vector2D(1, 0);
 		this.health = 100;
+		this.weapon = WeaponFactory.makePlebPistol(new Vector2D(this.radius, -this.radius/2));
+	}
+	
+	update(deltaTime, directionalInput, mousePosition) {
+		let acceleration = new Vector2D(0, 0);
+		if (directionalInput.length === 2) {
+			let axisAcceleration = this.acceleration * DIAG_ACCEL_FACTOR;
+			if (directionalInput === directionalInputCodes.up_left) {
+				acceleration.set(-axisAcceleration, -axisAcceleration);
+			}
+			else if (directionalInput === directionalInputCodes.down_left) {
+				acceleration.set(-axisAcceleration, axisAcceleration);
+			}
+			else if (directionalInput === directionalInputCodes.down_right) {
+				acceleration.set(axisAcceleration, axisAcceleration);
+			}
+			else if (directionalInput === directionalInputCodes.up_right) {
+				acceleration.set(axisAcceleration, -axisAcceleration);
+			}
+		}
+		else {
+			if (directionalInput === directionalInputCodes.up) {
+				acceleration.y = -this.acceleration;
+			}
+			else if (directionalInput === directionalInputCodes.left) {
+				acceleration.x = -this.acceleration;
+			}
+			else if (directionalInput === directionalInputCodes.down) {
+				acceleration.y = this.acceleration;
+			}
+			else if (directionalInput === directionalInputCodes.right) {
+				acceleration.x = this.acceleration;
+			}
+			else {
+				if (this.velocity.getLength() < this.minSpeed) {
+					this.velocity.set(0, 0);
+				}
+				else {
+					acceleration.copy(this.velocity)
+								.setLength(this.deceleration)
+								.neg();
+				}
+			}
+		}
+		
+		this.velocity.add(acceleration);
+		if (this.velocity.getLength() > this.maxSpeed) {
+			this.velocity.setLength(this.maxSpeed);
+		}
+		
+		let adjustedPlayerVelocity = new Vector2D().copy(this.velocity).mul(deltaTime);
+		this.position.add(adjustedPlayerVelocity);
+		
+		this.direction.copy(mousePosition).sub(this.position);
+		
+		return adjustedPlayerVelocity;
 	}
 	
 	draw(ctx) {
@@ -606,8 +656,7 @@ class Player {
 		ctx.fill();
 		
 		ctx.setTransform(1, 0, 0, 1, this.position.x, this.position.y);
-		ctx.rotate(this.orientation);
-		ctx.transform(1, 0, 0, 1, this.radius, -this.weapon.size/2);
+		ctx.rotate(this.getOrientation());
 		this.weapon.draw(ctx);
 		
 		ctx.setTransform(1, 0, 0, 1, 0, 0);
@@ -618,46 +667,67 @@ class Player {
 		ctx.stroke();
 	}
 	
-	getHitBox() {
-		return new Rectangle(
-			this.position.x - this.radius,
-			this.position.y - this.radius,
-			this.radius * 2,
-			this.radius * 2
-		);
+	getOrientation() {
+		if (this.direction.x !== 0) {
+			return Math.atan2(this.direction.y, this.direction.x);
+		}
+		else if (this.direction.y > 0) {
+			return DEGREES_90;
+		}
+		else {
+			return DEGREES_270;
+		}
+	}
+	
+	fireWeapon() {		
+		return this.weapon.fire(this.direction, this.position, this.radius);
 	}
 }
 
 module.exports = Player;
 
-},{"../lib/Rectangle":4,"./Weapon":11}],11:[function(require,module,exports){
+},{"../lib/Rectangle":4,"../lib/Vector2D":6,"../lib/directionalInputCodes":7,"./GameObject":10,"./Weapon":13}],13:[function(require,module,exports){
 'use strict';
 
+var GameObject = require('./GameObject');
 var Bullet = require('./Bullet');
+var Vector2D = require('../lib/Vector2D');
 
-class Weapon {
-	constructor(size, color = "red", bulletSpeed = 350, fireRate = 3, bulletRadius = 7, bulletColor = 'rgba(80,80,80,1)') {
-		this.size = size;
-		this.color = color;
+class Weapon extends GameObject {
+	constructor(
+		position, 
+		size, 
+		color, 
+		bulletSpeed, 
+		fireRate, 
+		bulletRadius, 
+		bulletColor,
+		bulletOutlineColor
+	) {
+		super(new Vector2D(0, 0), position, size, color);
 		this.outlineColor = 'rgba(80,80,80,1)';
-		this.bulletRadius = bulletRadius;
 		this.bulletSpeed = bulletSpeed;
 		this.msPerBullet = 1000/fireRate;
+		this.bulletRadius = bulletRadius;
 		this.bulletColor = bulletColor;
+		this.bulletOutlineColor = bulletOutlineColor;
 		
 		this.prevFireTime = 0;
 	}
 	
-	fire(direction, position) {
-		var currTime = Date.now();
+	fire(direction, playerPosition, distanceFromPlayer) {
+		let currTime = Date.now();
 		if (currTime - this.prevFireTime > this.msPerBullet) {
 			this.prevFireTime = currTime;
-			direction.setLength(this.bulletSpeed);
+			let bulletVelocity = new Vector2D().copy(direction).setLength(distanceFromPlayer + this.size);
+			let bulletPosition = new Vector2D().copy(playerPosition).add(bulletVelocity);
+			bulletVelocity.setLength(this.bulletSpeed);
 			return new Bullet(
-				direction,
-				position,
+				bulletVelocity,
+				bulletPosition,
 				this.bulletRadius,
-				this.bulletColor
+				this.bulletColor,
+				this.bulletOutlineColor
 			);
 		}
 		else {
@@ -665,7 +735,12 @@ class Weapon {
 		}
 	}
 	
+	update(deltaTime) {
+		
+	}
+	
 	draw(ctx) {
+		ctx.transform(1, 0, 0, 1, this.position.x, this.position.y);
 		ctx.fillStyle = this.color;
 		ctx.fillRect(0, 0, this.size, this.size);
 		
@@ -673,8 +748,22 @@ class Weapon {
 		ctx.lineWidth = 3;
 		ctx.strokeRect(0, 0, this.size, this.size);
 	}
+	
+	getHitBox() {
+		throw new Error("Weapon.prototype.getHitBox() not implemented yet.");
+	}
 }
 
-module.exports = Weapon;
+// dark grey: 'rgba(80,80,80,1)'
+var WeaponFactory = {
+	makePlebPistol: function(position) {
+		return new Weapon(position, 20, "red", 350, 3, 8, 'rgba(255,128,0,1)', 'rgba(80,80,80,1)');
+	},
+	makeLavaPisser: function(position) {
+		return new Weapon(position, 20, "red", 225, 1000, 10, 'rgba(255,85,0,1)', 'rgba(255,0,0,1)');
+	}
+};
 
-},{"./Bullet":7}]},{},[2]);
+module.exports = { WeaponFactory: WeaponFactory };
+
+},{"../lib/Vector2D":6,"./Bullet":8,"./GameObject":10}]},{},[2]);

@@ -1,13 +1,19 @@
 'use strict'
 
+var GameObject = require('./GameObject');
 var Rectangle = require('../lib/Rectangle');
+var Vector2D = require('../lib/Vector2D');
 
-class Bullet {
-	constructor(velocity, position, radius = 7, color = "black") {
-		this.velocity = velocity;
-		this.position = position;
+class Bullet extends GameObject {
+	constructor(velocity, position, radius = 7, color = "black", outlineColor = 'rgba(80,80,80,1)') {
+		super(velocity, position, radius*2, color);
 		this.radius = radius;
-		this.color = color;
+		this.outlineColor = outlineColor;
+	}
+	
+	update(deltaTime) {
+		let adjustedBulletVelocity = new Vector2D().copy(this.velocity).mul(deltaTime);
+		this.position.add(adjustedBulletVelocity);
 	}
 	
 	draw(ctx) {
@@ -16,15 +22,9 @@ class Bullet {
 		ctx.arc(this.position.x, this.position.y, this.radius, 0, 2*Math.PI);
 		ctx.fillStyle = this.color;
 		ctx.fill();
-	}
-	
-	getHitBox() {
-		return new Rectangle(
-			this.position.x - this.radius,
-			this.position.y - this.radius,
-			this.radius * 2,
-			this.radius * 2
-		);
+		ctx.strokeStyle = this.outlineColor;
+		ctx.lineWidth = 2;
+		ctx.stroke();
 	}
 }
 

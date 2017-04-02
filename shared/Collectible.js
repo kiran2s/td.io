@@ -1,15 +1,19 @@
 'use strict';
 
+var GameObject = require('./GameObject');
 var Rectangle = require('../lib/Rectangle');
+var Vector2D = require('../lib/Vector2D');
 
-class Collectible {
+class Collectible extends GameObject {
 	constructor(position) {
-		this.position = position;
+		super(new Vector2D(0, 0), position, 20, "orange");
 		this.orientation = 0;
-		this.rotationSpeed = 0.02;
-		this.size = 20;
-		this.color = "orange";
+		this.rotationSpeed = 2;
 		this.outlineColor = 'rgba(80,80,80,1)';
+	}
+	
+	update(deltaTime) {
+		this.orientation += this.rotationSpeed * deltaTime;
 	}
 	
 	draw(ctx) {
@@ -22,15 +26,6 @@ class Collectible {
 		ctx.strokeStyle = this.outlineColor;
 		ctx.lineWidth = 3;
 		ctx.strokeRect(0, 0, this.size, this.size);
-	}
-	
-	getHitBox() {
-		return new Rectangle(
-			this.position.x - this.size/2,
-			this.position.y - this.size/2,
-			this.size,
-			this.size
-		);
 	}
 }
 

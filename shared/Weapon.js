@@ -1,30 +1,44 @@
 'use strict';
 
+var GameObject = require('./GameObject');
 var Bullet = require('./Bullet');
+var Vector2D = require('../lib/Vector2D');
 
-class Weapon {
-	constructor(size, color = "red", bulletSpeed = 350, fireRate = 3, bulletRadius = 7, bulletColor = 'rgba(80,80,80,1)') {
-		this.size = size;
-		this.color = color;
+class Weapon extends GameObject {
+	constructor(
+		position, 
+		size, 
+		color, 
+		bulletSpeed, 
+		fireRate, 
+		bulletRadius, 
+		bulletColor,
+		bulletOutlineColor
+	) {
+		super(new Vector2D(0, 0), position, size, color);
 		this.outlineColor = 'rgba(80,80,80,1)';
-		this.bulletRadius = bulletRadius;
 		this.bulletSpeed = bulletSpeed;
 		this.msPerBullet = 1000/fireRate;
+		this.bulletRadius = bulletRadius;
 		this.bulletColor = bulletColor;
+		this.bulletOutlineColor = bulletOutlineColor;
 		
 		this.prevFireTime = 0;
 	}
 	
-	fire(direction, position) {
-		var currTime = Date.now();
+	fire(direction, playerPosition, distanceFromPlayer) {
+		let currTime = Date.now();
 		if (currTime - this.prevFireTime > this.msPerBullet) {
 			this.prevFireTime = currTime;
-			direction.setLength(this.bulletSpeed);
+			let bulletVelocity = new Vector2D().copy(direction).setLength(distanceFromPlayer + this.size);
+			let bulletPosition = new Vector2D().copy(playerPosition).add(bulletVelocity);
+			bulletVelocity.setLength(this.bulletSpeed);
 			return new Bullet(
-				direction,
-				position,
+				bulletVelocity,
+				bulletPosition,
 				this.bulletRadius,
-				this.bulletColor
+				this.bulletColor,
+				this.bulletOutlineColor
 			);
 		}
 		else {
@@ -32,7 +46,12 @@ class Weapon {
 		}
 	}
 	
+	update(deltaTime) {
+		
+	}
+	
 	draw(ctx) {
+		ctx.transform(1, 0, 0, 1, this.position.x, this.position.y);
 		ctx.fillStyle = this.color;
 		ctx.fillRect(0, 0, this.size, this.size);
 		
@@ -40,6 +59,20 @@ class Weapon {
 		ctx.lineWidth = 3;
 		ctx.strokeRect(0, 0, this.size, this.size);
 	}
+	
+	getHitBox() {
+		throw new Error("Weapon.prototype.getHitBox() not implemented yet.");
+	}
 }
 
-module.exports = Weapon;
+// dark grey: 'rgba(80,80,80,1)'
+var WeaponFactory = {
+	makePlebPistol: function(position) {
+		return new Weapon(position, 20, "red", 350, 3, 8, 'rgba(255,128,0,1)', 'rgba(80,80,80,1)');
+	},
+	makeLavaPisser: function(position) {
+		return new Weapon(position, 20, "red", 225, 1000, 10, 'rgba(255,85,0,1)', 'rgba(255,0,0,1)');
+	}
+};
+
+module.exports = { WeaponFactory: WeaponFactory };

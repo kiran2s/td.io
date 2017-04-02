@@ -44,11 +44,11 @@ class Client {
 			keys += 'D';
 		}
 		
-		var mousePos = new Vector2D(this.mouse.x, this.mouse.y);
+		let mousePos = new Vector2D(this.mouse.x, this.mouse.y);
 		
-		var mouseLeftButtonDown = this.mouse.isLeftButtonDown;
+		let mouseLeftButtonDown = this.mouse.isLeftButtonDown;
 		
-		var input = {
+		let input = {
 			keysPressed: keys,
 			mousePosition: mousePos,
 			isMouseLeftButtonDown: mouseLeftButtonDown
