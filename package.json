@@ -1,5 +1,10 @@
 {
-	"name": "td-io",
-	"version": "0.0.1",
-	"description": "Tower Defense io Game"
+  "name": "td-io",
+  "version": "0.0.1",
+  "description": "Tower Defense io Game",
+  "dependencies": {
+    "express": "^4.15.2",
+    "node-uuid": "^1.4.8",
+    "socket.io": "^1.7.3"
+  }
 }
