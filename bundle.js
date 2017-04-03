@@ -588,7 +588,7 @@ class Player extends GameObject {
 		this.maxSpeed = 225;
 		this.minSpeed = 5;
 		this.radius = this.size/2;
-		this.direction = new Vector2D(1, 0);
+		this.orientation = 0;
 		this.health = 100;
 		this.weapon = WeaponFactory.makePlebPistol(new Vector2D(this.radius, -this.radius/2));
 	}
@@ -643,7 +643,8 @@ class Player extends GameObject {
 		let adjustedPlayerVelocity = new Vector2D().copy(this.velocity).mul(deltaTime);
 		this.position.add(adjustedPlayerVelocity);
 		
-		this.direction.copy(mousePosition).sub(this.position);
+		let direction = new Vector2D().copy(mousePosition).sub(this.position);
+		this.orientation = this.convertToOrientation(direction);
 		
 		return adjustedPlayerVelocity;
 	}
@@ -656,7 +657,7 @@ class Player extends GameObject {
 		ctx.fill();
 		
 		ctx.setTransform(1, 0, 0, 1, this.position.x, this.position.y);
-		ctx.rotate(this.getOrientation());
+		ctx.rotate(this.orientation);
 		this.weapon.draw(ctx);
 		
 		ctx.setTransform(1, 0, 0, 1, 0, 0);
@@ -667,11 +668,11 @@ class Player extends GameObject {
 		ctx.stroke();
 	}
 	
-	getOrientation() {
-		if (this.direction.x !== 0) {
-			return Math.atan2(this.direction.y, this.direction.x);
+	convertToOrientation(direction) {
+		if (direction.x !== 0) {
+			return Math.atan2(direction.y, direction.x);
 		}
-		else if (this.direction.y > 0) {
+		else if (direction.y > 0) {
 			return DEGREES_90;
 		}
 		else {
@@ -680,7 +681,7 @@ class Player extends GameObject {
 	}
 	
 	fireWeapon() {		
-		return this.weapon.fire(this.direction, this.position, this.radius);
+		return this.weapon.fire(this.orientation, this.position, this.radius);
 	}
 }
 
@@ -700,6 +701,7 @@ class Weapon extends GameObject {
 		color, 
 		bulletSpeed, 
 		fireRate, 
+		bulletSpread, 
 		bulletRadius, 
 		bulletColor,
 		bulletOutlineColor
@@ -708,6 +710,7 @@ class Weapon extends GameObject {
 		this.outlineColor = 'rgba(80,80,80,1)';
 		this.bulletSpeed = bulletSpeed;
 		this.msPerBullet = 1000/fireRate;
+		this.bulletSpread = bulletSpread * Math.PI/180;
 		this.bulletRadius = bulletRadius;
 		this.bulletColor = bulletColor;
 		this.bulletOutlineColor = bulletOutlineColor;
@@ -715,11 +718,12 @@ class Weapon extends GameObject {
 		this.prevFireTime = 0;
 	}
 	
-	fire(direction, playerPosition, distanceFromPlayer) {
+	fire(playerOrientation, playerPosition, distanceFromPlayer) {
 		let currTime = Date.now();
 		if (currTime - this.prevFireTime > this.msPerBullet) {
 			this.prevFireTime = currTime;
-			let bulletVelocity = new Vector2D().copy(direction).setLength(distanceFromPlayer + this.size);
+			let bulletDirection = this.generateBulletDirection(playerOrientation);
+			let bulletVelocity = new Vector2D().copy(bulletDirection).setLength(distanceFromPlayer + this.size);
 			let bulletPosition = new Vector2D().copy(playerPosition).add(bulletVelocity);
 			bulletVelocity.setLength(this.bulletSpeed);
 			return new Bullet(
@@ -752,15 +756,23 @@ class Weapon extends GameObject {
 	getHitBox() {
 		throw new Error("Weapon.prototype.getHitBox() not implemented yet.");
 	}
+	
+	generateBulletDirection(angle) {
+		angle = angle + (Math.random() * this.bulletSpread - this.bulletSpread/2);
+		return new Vector2D(Math.cos(angle), Math.sin(angle));
+	}
 }
 
 // dark grey: 'rgba(80,80,80,1)'
 var WeaponFactory = {
 	makePlebPistol: function(position) {
-		return new Weapon(position, 20, "red", 350, 3, 8, 'rgba(255,128,0,1)', 'rgba(80,80,80,1)');
+		return new Weapon(position, 20, "red", 350, 3, 12, 8, 'rgba(255,128,0,1)', 'rgba(80,80,80,1)');
 	},
 	makeLavaPisser: function(position) {
-		return new Weapon(position, 20, "red", 225, 1000, 10, 'rgba(255,85,0,1)', 'rgba(255,0,0,1)');
+		return new Weapon(position, 20, "red", 225, 1000, 6, 10, 'rgba(255,85,0,1)', 'rgba(255,0,0,1)');
+	},
+	makeVolcano: function(position) {
+		return new Weapon(position, 20, "red", 225, 1000, 60, 10, 'rgba(255,85,0,1)', 'rgba(255,0,0,1)');
 	}
 };
 

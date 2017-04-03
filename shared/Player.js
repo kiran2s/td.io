@@ -20,7 +20,7 @@ class Player extends GameObject {
 		this.maxSpeed = 225;
 		this.minSpeed = 5;
 		this.radius = this.size/2;
-		this.direction = new Vector2D(1, 0);
+		this.orientation = 0;
 		this.health = 100;
 		this.weapon = WeaponFactory.makePlebPistol(new Vector2D(this.radius, -this.radius/2));
 	}
@@ -75,7 +75,8 @@ class Player extends GameObject {
 		let adjustedPlayerVelocity = new Vector2D().copy(this.velocity).mul(deltaTime);
 		this.position.add(adjustedPlayerVelocity);
 		
-		this.direction.copy(mousePosition).sub(this.position);
+		let direction = new Vector2D().copy(mousePosition).sub(this.position);
+		this.orientation = this.convertToOrientation(direction);
 		
 		return adjustedPlayerVelocity;
 	}
@@ -88,7 +89,7 @@ class Player extends GameObject {
 		ctx.fill();
 		
 		ctx.setTransform(1, 0, 0, 1, this.position.x, this.position.y);
-		ctx.rotate(this.getOrientation());
+		ctx.rotate(this.orientation);
 		this.weapon.draw(ctx);
 		
 		ctx.setTransform(1, 0, 0, 1, 0, 0);
@@ -99,11 +100,11 @@ class Player extends GameObject {
 		ctx.stroke();
 	}
 	
-	getOrientation() {
-		if (this.direction.x !== 0) {
-			return Math.atan2(this.direction.y, this.direction.x);
+	convertToOrientation(direction) {
+		if (direction.x !== 0) {
+			return Math.atan2(direction.y, direction.x);
 		}
-		else if (this.direction.y > 0) {
+		else if (direction.y > 0) {
 			return DEGREES_90;
 		}
 		else {
@@ -112,7 +113,7 @@ class Player extends GameObject {
 	}
 	
 	fireWeapon() {		
-		return this.weapon.fire(this.direction, this.position, this.radius);
+		return this.weapon.fire(this.orientation, this.position, this.radius);
 	}
 }
 
