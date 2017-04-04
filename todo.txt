@@ -1,8 +1,10 @@
 - Improve performance
 	- Improve collision detection code
+		- reduce number of calculations (Quadtree)
 		- player-object collisions
-		- reduce number of calculations
 		- collisions should reduce health
+
+- Check how others draw to screen
 
 - Health bar
 - Client/Server interaction
