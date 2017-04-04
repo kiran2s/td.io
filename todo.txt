@@ -1,5 +1,4 @@
 - Improve performance
-	- Drawing to canvas
 	- Improve collision detection code
 		- player-object collisions
 		- reduce number of calculations

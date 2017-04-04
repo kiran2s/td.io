@@ -349,11 +349,13 @@ module.exports = {
 };
 
 },{}],8:[function(require,module,exports){
-'use strict'
+'use strict';
 
 var GameObject = require('./GameObject');
 var Rectangle = require('../lib/Rectangle');
 var Vector2D = require('../lib/Vector2D');
+
+var DEGREES_360 = 2*Math.PI;
 
 class Bullet extends GameObject {
 	constructor(velocity, position, radius = 7, color = "black", outlineColor = 'rgba(80,80,80,1)') {
@@ -370,7 +372,7 @@ class Bullet extends GameObject {
 	draw(ctx) {
 		ctx.setTransform(1, 0, 0, 1, 0, 0);
 		ctx.beginPath();
-		ctx.arc(this.position.x, this.position.y, this.radius, 0, 2*Math.PI);
+		ctx.arc(this.position.x, this.position.y, this.radius, 0, DEGREES_360);
 		ctx.fillStyle = this.color;
 		ctx.fill();
 		ctx.strokeStyle = this.outlineColor;
