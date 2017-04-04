@@ -772,7 +772,7 @@ var WeaponFactory = {
 		return new Weapon(position, 20, "red", 225, 1000, 6, 10, 'rgba(255,85,0,1)', 'rgba(255,0,0,1)');
 	},
 	makeVolcano: function(position) {
-		return new Weapon(position, 20, "red", 225, 1000, 60, 10, 'rgba(255,85,0,1)', 'rgba(255,0,0,1)');
+		return new Weapon(position, 20, "red", 150, 1000, 60, 10, 'rgba(255,85,0,1)', 'rgba(255,0,0,1)');
 	}
 };
 
