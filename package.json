@@ -4,7 +4,6 @@
   "description": "Tower Defense io Game",
   "dependencies": {
     "browserify": "^14.1.0",
-    "d3-quadtree": "^1.0.3",
     "express": "^4.15.2",
     "node-uuid": "^1.4.8",
     "socket.io": "^1.7.3"

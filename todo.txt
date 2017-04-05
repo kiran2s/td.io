@@ -6,11 +6,13 @@
 
 - d3-quadtree:
 var d3 = require("d3-quadtree");
-let data = [[1, 2, 'bullet'], [3, 4, 'bullet'], [3, 3, 'player']];
+let data = [{ x: 1, y: 2, mask: 0 }, { x: 3, y: 4, mask: 0 }, { x: 3, y: 3, mask: 1 }];
 let tree = d3.quadtree()
+    .x(function(d) { return d.x; })
+    .y(function(d) { return d.y; })
     .addAll(data);
-tree.x(function(d) { if (d[2] === 'bullet') return d[0]; else return undefined; })
-    .y(function(d) { if (d[2] === 'bullet') return d[1]; else return undefined; });
+tree.x(function(d) { if (d.mask === 0) return d.x; })
+    .y(function(d) { if (d.mask === 0) return d.y; });
 let point = tree.find(3, 3, 3);
 console.log(point);
 
