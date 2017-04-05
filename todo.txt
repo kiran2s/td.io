@@ -1,10 +1,18 @@
 - Improve performance
 	- Improve collision detection code
-		- reduce number of calculations (Quadtree)
+		- reduce number of calculations
 		- player-object collisions
 		- collisions should reduce health
 
-- Check how others draw to screen
+- d3-quadtree:
+var d3 = require("d3-quadtree");
+let data = [[1, 2, 'bullet'], [3, 4, 'bullet'], [3, 3, 'player']];
+let tree = d3.quadtree()
+    .addAll(data);
+tree.x(function(d) { if (d[2] === 'bullet') return d[0]; else return undefined; })
+    .y(function(d) { if (d[2] === 'bullet') return d[1]; else return undefined; });
+let point = tree.find(3, 3, 3);
+console.log(point);
 
 - Health bar
 - Client/Server interaction
