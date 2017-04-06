@@ -73,7 +73,7 @@ no spatial hash:
 	stream:   30-50ms
 	
 spatial hash:
-	baseline: 0-6ms
+	baseline: 0-6ms (20-30ms when moving mouse around)
 	peak:     55ms
 	stream:   10-35ms
 - performance hit due to having to update hash objects
