@@ -13,6 +13,16 @@ class GameObject {
 		this.position = position;
 		this.size = size;
 		this.color = color;
+
+		// spatialhash-2d variables
+		this.range = {
+			x: this.position.x,
+			y: this.position.y,
+			w: this.size/2,
+			h: this.size/2
+		};
+
+		this.__b = undefined;
 	}
 	
 	update(deltaTime) {
@@ -30,6 +40,11 @@ class GameObject {
 			this.size,
 			this.size
 		);
+	}
+
+	updateRange() {
+		this.range.x = this.position.x;
+		this.range.y = this.position.y;
 	}
 }
 

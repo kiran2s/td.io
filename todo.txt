@@ -60,3 +60,21 @@ Additional node packages:
 Setup:
 $ browserify index.js -o bundle.js
 $ node Server.js
+
+-----------------------------------------------------------------------
+
+Performance:
+100 update loops
+100 collectibles
+
+no spatial hash:
+	baseline: 0-3ms
+	peak:     110ms
+	stream:   30-50ms
+	
+spatial hash:
+	baseline: 0-6ms
+	peak:     55ms
+	stream:   10-35ms
+- performance hit due to having to update hash objects
+	- amplifies when moving cursor around for some reason

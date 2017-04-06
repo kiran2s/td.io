@@ -77,7 +77,7 @@ class Client {
 
 module.exports = Client;
 
-},{"../lib/MouseState":3,"../lib/THREEx.KeyboardState":5,"../lib/Vector2D":6,"../shared/GameState":11}],2:[function(require,module,exports){
+},{"../lib/MouseState":3,"../lib/THREEx.KeyboardState":5,"../lib/Vector2D":6,"../shared/GameState":12}],2:[function(require,module,exports){
 'use strict';
 
 var Client = require('./Client');
@@ -349,6 +349,161 @@ module.exports = {
 };
 
 },{}],8:[function(require,module,exports){
+function SpatialHash(range, bucketSize) {
+    this.bucketSize = bucketSize || 100;
+    this.range = range;
+
+    this.init();
+}
+
+module.exports = SpatialHash;
+
+SpatialHash.prototype.init = function() {
+    var b = getBounds(this.range),
+        bucketSize = this.bucketSize;
+
+    this._hStart = ~~(b.left / bucketSize);
+    this._hEnd = ~~(b.right / bucketSize);
+    this._vStart = ~~(b.top / bucketSize);
+    this._vEnd = ~~(b.bottom / bucketSize);
+
+    var z = { };
+    var i = this._hStart;
+    for (; i <= this._hEnd; i++) {
+        var j = this._vStart,
+            a = { };
+
+        for (; j <= this._vEnd; j++)
+            a[j] = [];
+        z[i] = a;
+    }
+
+    this.hashes = z;
+    this.itemCount = 0;
+    this.horizontalBuckets = (this._hEnd - this._hStart) + 1;
+    this.verticalBuckets = (this._vEnd - this._vStart) + 1;
+    this.bucketCount = this.horizontalBuckets * this.verticalBuckets;
+    this._nId = -9e15;
+};
+
+SpatialHash.prototype.insert = function(item) {
+    if (!item.range) return;
+    var b = getBounds(item.range),
+        bucketSize = this.bucketSize;
+
+    var hStart = Math.max(~~(b.left / bucketSize), this._hStart);
+    var hEnd = Math.min(~~(b.right / bucketSize), this._hEnd);
+    var vStart = Math.max(~~(b.top / bucketSize), this._vStart);
+    var vEnd = Math.min(~~(b.bottom / bucketSize), this._vEnd);
+    item.__b = {
+        hStart: hStart,
+        hEnd: hEnd,
+        vStart: vStart,
+        vEnd: vEnd,
+        id: this._nId++
+    };
+
+    var i = hStart, j;
+    for (; i <= hEnd; i++) {
+        j = vStart;
+        for (; j <= vEnd; j++)
+            this.hashes[i][j].push(item);
+    }
+
+    if (this.itemCount++ >= 9e15)
+        throw new Error("SpatialHash: To ensure pure integer stability it must not have more than 9E15 (900 000 000 000 000) objects");
+    else if (this._nId > 9e15 - 1)
+        this._nId = -9e15;
+};
+
+SpatialHash.prototype.remove = function(item) {
+    if (!item.__b) return;
+
+    var hStart = item.__b.hStart;
+    var hEnd = item.__b.hEnd;
+    var vStart = item.__b.vStart;
+    var vEnd = item.__b.vEnd;
+
+    var i = hStart, j, k;
+    for (; i <= hEnd; i++) {
+        j = vStart;
+        for (; j <= vEnd; j++) {
+            k = this.hashes[i][j].indexOf(item);
+            if (k !== -1) this.hashes[i][j].splice(k, 1);
+        }
+    }
+    if (!(delete item.__b)) item.__b = undefined;
+    this.itemCount--;
+};
+
+SpatialHash.prototype.update = function(item) {
+    this.remove(item);
+    this.insert(item);
+};
+
+SpatialHash.prototype.__srch = function(range, selector, callback, returnOnFirst) {
+    var b = getBounds(range),
+        bucketSize = this.bucketSize;
+
+    // range might be larger than the hash's size itself
+    var hStart = Math.max(~~(b.left / bucketSize), this._hStart);
+    var hEnd = Math.min(~~(b.right / bucketSize), this._hEnd);
+    var vStart = Math.max(~~(b.top / bucketSize), this._vStart);
+    var vEnd = Math.min(~~(b.bottom / bucketSize), this._vEnd);
+
+    var i = hStart, j, k, l, m, o = [], p = [];
+    for (; i <= hEnd; i++) {
+        j = vStart;
+        for (; j <= vEnd; j++) {
+            k = this.hashes[i][j];
+            l = k.length;
+            m = 0;
+            for (; m < l; m++)
+                if (intersects(k[m].range, range) && p.indexOf(k[m].__b.id) === -1) {
+                    p.push(k[m].__b.id);
+                    if (selector) if (!selector(k[m])) continue;
+                    if (callback) callback(k[m]);
+                    if (returnOnFirst) return true;
+                    o.push(k[m]);
+                }
+        }
+    }
+    if (returnOnFirst) return false;
+    return o;
+};
+
+SpatialHash.prototype.any = function(range) {
+    return this.__srch(range, null, null, true);
+};
+
+SpatialHash.prototype.query = function(range, selector) {
+    return this.__srch(range, selector, null, false);
+};
+
+SpatialHash.prototype.find = function(range, callback) {
+    return this.__srch(range, null, callback, false);
+};
+
+function intersects(a, b) {
+    var xa = a.x - a.w, ya = a.y - a.h, wa = a.w * 2, ha = a.h * 2,
+        xb = b.x - b.w, yb = b.y - b.h, wb = b.w * 2, hb = b.h * 2;
+
+    return xa <= xb + wb
+        && xa + wa >= xb
+        && ya <= yb + hb
+        && ya + ha >= yb;
+}
+
+function getBounds(a) {
+    return {
+        left: a.x - a.w,
+        right: a.x + a.w,
+        top: a.y - a.h,
+        bottom: a.y + a.h
+    };
+}
+
+},{}],9:[function(require,module,exports){
 'use strict';
 
 var GameObject = require('./GameObject');
@@ -383,7 +538,7 @@ class Bullet extends GameObject {
 
 module.exports = Bullet;
 
-},{"../lib/Rectangle":4,"../lib/Vector2D":6,"./GameObject":10}],9:[function(require,module,exports){
+},{"../lib/Rectangle":4,"../lib/Vector2D":6,"./GameObject":11}],10:[function(require,module,exports){
 'use strict';
 
 var GameObject = require('./GameObject');
@@ -417,7 +572,7 @@ class Collectible extends GameObject {
 
 module.exports = Collectible;
 
-},{"../lib/Rectangle":4,"../lib/Vector2D":6,"./GameObject":10}],10:[function(require,module,exports){
+},{"../lib/Rectangle":4,"../lib/Vector2D":6,"./GameObject":11}],11:[function(require,module,exports){
 'use strict';
 
 var Rectangle = require('../lib/Rectangle');
@@ -433,6 +588,16 @@ class GameObject {
 		this.position = position;
 		this.size = size;
 		this.color = color;
+
+		// spatialhash-2d variables
+		this.range = {
+			x: this.position.x,
+			y: this.position.y,
+			w: this.size/2,
+			h: this.size/2
+		};
+
+		this.__b = undefined;
 	}
 	
 	update(deltaTime) {
@@ -451,16 +616,24 @@ class GameObject {
 			this.size
 		);
 	}
+
+	updateRange() {
+		this.range.x = this.position.x;
+		this.range.y = this.position.y;
+	}
 }
 
 module.exports = GameObject;
 
-},{"../lib/Rectangle":4}],11:[function(require,module,exports){
+},{"../lib/Rectangle":4}],12:[function(require,module,exports){
 'use strict';
 
 var Player = require('./Player');
 var Collectible = require('./Collectible');
 var Vector2D = require('../lib/Vector2D');
+var SpatialHash = require('spatialhash-2d');
+var updateCount = 0;
+var accumTime;
 
 class GameState {	
 	constructor(worldWidth, worldHeight) {
@@ -477,17 +650,26 @@ class GameState {
 		
 		this.bullets = [];
 		this.collectibles = [];
+		this.spatialHash = new SpatialHash( { x: this.worldWidth/2, y: this.worldHeight/2, w: this.worldWidth/2, h: this.worldHeight/2}, 20);
 		
-		for (let i = 0; i < 20; i++) {
+		for (let i = 0; i < 100; i++) {
 			let cX = Math.floor(Math.random() * worldWidth);
 			let cY = Math.floor(Math.random() * worldHeight);
-			this.collectibles.push(new Collectible(new Vector2D(cX, cY)));
+			let collectible = new Collectible(new Vector2D(cX, cY));
+			this.collectibles.push(collectible);
+			this.spatialHash.insert(collectible);
 		}
+
+		//this.spatialHash.insert(this.player);
 		
 		this.prevTime = Date.now();
 	}
 	
 	update(input) {
+		if (updateCount === 0) {
+			accumTime = 0;
+		}
+		
 		let currTime = Date.now();
 		let deltaTime = (currTime - this.prevTime) / 1000;
 		this.prevTime = currTime;
@@ -495,7 +677,15 @@ class GameState {
 		this.updatePlayer(input, deltaTime);
 		this.updateBullets(input, deltaTime);
 		this.updateCollectibles(deltaTime);
+
 		this.detectCollisions();
+	
+		accumTime += Date.now() - currTime;
+		updateCount++;
+		if (updateCount >= 100) {
+			console.log(accumTime);
+			updateCount = 0;
+		}
 	}
 	
 	draw(ctx) {		
@@ -518,6 +708,8 @@ class GameState {
 			this.player.position.sub(adjustedPlayerVelocity);
 			this.player.velocity.set(0, 0);
 		}
+		//this.player.updateRange();
+		//this.spatialHash.update(this.player);
 	}
 	
 	updateBullets(input, deltaTime) {
@@ -525,6 +717,7 @@ class GameState {
 			let newBullet = this.player.fireWeapon();
 			if (newBullet !== null) {
 				this.bullets.push(newBullet);
+				//this.spatialHash.insert(newBullet);
 			}
 		}
 		
@@ -532,6 +725,8 @@ class GameState {
 			let bullet = this.bullets[i];
 			if (this.isWithinGameWorld(bullet.position)) {
 				bullet.update(deltaTime);
+				bullet.updateRange();
+				//this.spatialHash.update(bullet);
 			}
 			else {
 				this.bullets.splice(i, 1);
@@ -542,11 +737,28 @@ class GameState {
 	
 	updateCollectibles(deltaTime) {
 		for (let i = 0; i < this.collectibles.length; i++) {
-			this.collectibles[i].update(deltaTime);
+			let collectible = this.collectibles[i];
+			collectible.update(deltaTime);
+			collectible.updateRange();
+			//this.spatialHash.update(collectible);
 		}
 	}
 	
 	detectCollisions() {
+		/**/
+		for (let i = 0; i < this.bullets.length; i++) {
+			let bullet = this.bullets[i];
+			let intersectList = this.spatialHash.query(bullet.range, function(item) { return item.constructor.name === 'Collectible'; });
+			if (intersectList.length > 0) {
+				let j = this.collectibles.findIndex(function(c) { return JSON.stringify(intersectList[0]) === JSON.stringify(c); });
+				let collectible = this.collectibles[j];
+				this.collectibles.splice(j, 1);
+				this.spatialHash.remove(collectible);
+			}
+		}
+		/**/
+
+		/*
 		for (let i = 0; i < this.bullets.length; i++) {
 			let bulletHitBox = this.bullets[i].getHitBox();
 			for (let j = 0; j < this.collectibles.length; j++) {
@@ -557,6 +769,7 @@ class GameState {
 				}
 			}
 		}
+		/**/
 	}
 	
 	isWithinGameWorld(position) {
@@ -567,7 +780,7 @@ class GameState {
 
 module.exports = GameState;
 
-},{"../lib/Vector2D":6,"./Collectible":9,"./Player":12}],12:[function(require,module,exports){
+},{"../lib/Vector2D":6,"./Collectible":10,"./Player":13,"spatialhash-2d":8}],13:[function(require,module,exports){
 'use strict';
 
 var GameObject = require('./GameObject');
@@ -689,7 +902,7 @@ class Player extends GameObject {
 
 module.exports = Player;
 
-},{"../lib/Rectangle":4,"../lib/Vector2D":6,"../lib/directionalInputCodes":7,"./GameObject":10,"./Weapon":13}],13:[function(require,module,exports){
+},{"../lib/Rectangle":4,"../lib/Vector2D":6,"../lib/directionalInputCodes":7,"./GameObject":11,"./Weapon":14}],14:[function(require,module,exports){
 'use strict';
 
 var GameObject = require('./GameObject');
@@ -780,4 +993,4 @@ var WeaponFactory = {
 
 module.exports = { WeaponFactory: WeaponFactory };
 
-},{"../lib/Vector2D":6,"./Bullet":8,"./GameObject":10}]},{},[2]);
+},{"../lib/Vector2D":6,"./Bullet":9,"./GameObject":11}]},{},[2]);
