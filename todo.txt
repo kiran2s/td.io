@@ -1,20 +1,14 @@
+- Review GameState.js
+
+- Update detectCollisions
+
 - Improve performance
 	- Improve collision detection code
-		- reduce number of calculations
+		- reduce number of updates as much as possible
 		- player-object collisions
 		- collisions should reduce health
 
-- d3-quadtree:
-var d3 = require("d3-quadtree");
-let data = [{ x: 1, y: 2, mask: 0 }, { x: 3, y: 4, mask: 0 }, { x: 3, y: 3, mask: 1 }];
-let tree = d3.quadtree()
-    .x(function(d) { return d.x; })
-    .y(function(d) { return d.y; })
-    .addAll(data);
-tree.x(function(d) { if (d.mask === 0) return d.x; })
-    .y(function(d) { if (d.mask === 0) return d.y; });
-let point = tree.find(3, 3, 3);
-console.log(point);
+- Improve client code for keys pressed
 
 - Health bar
 - Client/Server interaction
@@ -78,3 +72,17 @@ spatial hash:
 	stream:   10-35ms
 - performance hit due to having to update hash objects
 	- amplifies when moving cursor around for some reason
+
+-----------------------------------------------------------------------sd
+
+- d3-quadtree:
+var d3 = require("d3-quadtree");
+let data = [{ x: 1, y: 2, mask: 0 }, { x: 3, y: 4, mask: 0 }, { x: 3, y: 3, mask: 1 }];
+let tree = d3.quadtree()
+    .x(function(d) { return d.x; })
+    .y(function(d) { return d.y; })
+    .addAll(data);
+tree.x(function(d) { if (d.mask === 0) return d.x; })
+    .y(function(d) { if (d.mask === 0) return d.y; });
+let point = tree.find(3, 3, 3);
+console.log(point);

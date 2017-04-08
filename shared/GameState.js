@@ -12,8 +12,6 @@ class GameState {
 		this.worldWidth = worldWidth;
 		this.worldHeight = worldHeight;
 		
-		GameState.directionalInputCodes;
-		
 		this.player = new Player(
 			new Vector2D(0, 0),
 			new Vector2D(this.worldWidth/2, this.worldHeight/2),
@@ -22,7 +20,7 @@ class GameState {
 		
 		this.bullets = [];
 		this.collectibles = [];
-		this.spatialHash = new SpatialHash( { x: this.worldWidth/2, y: this.worldHeight/2, w: this.worldWidth/2, h: this.worldHeight/2}, 20);
+		this.spatialHash = new SpatialHash( { x: this.worldWidth/2, y: this.worldHeight/2, w: this.worldWidth/2, h: this.worldHeight/2 }, 100); //200
 		
 		for (let i = 0; i < 100; i++) {
 			let cX = Math.floor(Math.random() * worldWidth);
@@ -32,7 +30,7 @@ class GameState {
 			this.spatialHash.insert(collectible);
 		}
 
-		//this.spatialHash.insert(this.player);
+		this.spatialHash.insert(this.player);
 		
 		this.prevTime = Date.now();
 	}
@@ -55,7 +53,7 @@ class GameState {
 		accumTime += Date.now() - currTime;
 		updateCount++;
 		if (updateCount >= 100) {
-			console.log(accumTime);
+			//console.log(accumTime);
 			updateCount = 0;
 		}
 	}
@@ -71,17 +69,30 @@ class GameState {
 	}
 	
 	updatePlayer(input, deltaTime) {
+		let preUpdateBucket = this.findBucket(this.player.position);
 		let adjustedPlayerVelocity = this.player.update(
 			deltaTime, 
 			input.keysPressed, 
 			input.mousePosition
 		);
+		let postUpdateBucket = this.findBucket(this.player.position);
 		if (!this.isWithinGameWorld(this.player.position)) {
 			this.player.position.sub(adjustedPlayerVelocity);
 			this.player.velocity.set(0, 0);
+			this.player.updateRange();
 		}
-		//this.player.updateRange();
-		//this.spatialHash.update(this.player);
+		if (preUpdateBucket.x !== postUpdateBucket.x || preUpdateBucket.y !== postUpdateBucket.y) {
+			this.spatialHash.update(this.player);
+		}
+	}
+
+	updateGameObject(gameObject, deltaTime) {
+		let preUpdateBucket = this.findBucket(gameObject.position);
+		gameObject.update(deltaTime);
+		let postUpdateBucket = this.findBucket(gameObject.position);
+		if (preUpdateBucket.x !== postUpdateBucket.x || preUpdateBucket.y !== postUpdateBucket.y) {
+			this.spatialHash.update(gameObject);
+		}
 	}
 	
 	updateBullets(input, deltaTime) {
@@ -89,19 +100,18 @@ class GameState {
 			let newBullet = this.player.fireWeapon();
 			if (newBullet !== null) {
 				this.bullets.push(newBullet);
-				//this.spatialHash.insert(newBullet);
+				this.spatialHash.insert(newBullet);
 			}
 		}
 		
 		for (let i = 0; i < this.bullets.length; i++) {
 			let bullet = this.bullets[i];
 			if (this.isWithinGameWorld(bullet.position)) {
-				bullet.update(deltaTime);
-				bullet.updateRange();
-				//this.spatialHash.update(bullet);
+				this.updateGameObject(bullet, deltaTime);
 			}
 			else {
 				this.bullets.splice(i, 1);
+				this.spatialHash.remove(bullet);
 				i--;
 			}
 		}
@@ -110,9 +120,7 @@ class GameState {
 	updateCollectibles(deltaTime) {
 		for (let i = 0; i < this.collectibles.length; i++) {
 			let collectible = this.collectibles[i];
-			collectible.update(deltaTime);
-			collectible.updateRange();
-			//this.spatialHash.update(collectible);
+			this.updateGameObject(collectible, deltaTime);
 		}
 	}
 	
@@ -130,7 +138,7 @@ class GameState {
 		}
 		/**/
 
-		/*
+		/* Brute force approach
 		for (let i = 0; i < this.bullets.length; i++) {
 			let bulletHitBox = this.bullets[i].getHitBox();
 			for (let j = 0; j < this.collectibles.length; j++) {
@@ -147,6 +155,14 @@ class GameState {
 	isWithinGameWorld(position) {
 		return 	position.x > 0 && position.x < this.worldWidth &&
 				position.y > 0 && position.y < this.worldHeight;
+	}
+
+	findBucket(position) {
+		let bucketSize = this.spatialHash.bucketSize;
+		return  {
+			bucketX: Math.ceil(Math.floor(position.x / bucketSize) / 2),
+			bucketY: Math.ceil(Math.floor(position.y / bucketSize) / 2)
+		};
 	}
 }
 

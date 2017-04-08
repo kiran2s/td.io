@@ -510,7 +510,7 @@ var GameObject = require('./GameObject');
 var Rectangle = require('../lib/Rectangle');
 var Vector2D = require('../lib/Vector2D');
 
-var DEGREES_360 = 2*Math.PI;
+const DEGREES_360 = 2*Math.PI;
 
 class Bullet extends GameObject {
 	constructor(velocity, position, radius = 7, color = "black", outlineColor = 'rgba(80,80,80,1)') {
@@ -522,6 +522,7 @@ class Bullet extends GameObject {
 	update(deltaTime) {
 		let adjustedBulletVelocity = new Vector2D().copy(this.velocity).mul(deltaTime);
 		this.position.add(adjustedBulletVelocity);
+		this.updateRange();
 	}
 	
 	draw(ctx) {
@@ -555,6 +556,7 @@ class Collectible extends GameObject {
 	
 	update(deltaTime) {
 		this.orientation += this.rotationSpeed * deltaTime;
+		this.updateRange();
 	}
 	
 	draw(ctx) {
@@ -589,15 +591,15 @@ class GameObject {
 		this.size = size;
 		this.color = color;
 
-		// spatialhash-2d variables
+		// spatialhash-2d variables begin
 		this.range = {
 			x: this.position.x,
 			y: this.position.y,
 			w: this.size/2,
 			h: this.size/2
 		};
-
 		this.__b = undefined;
+		// spatialhash-2d variables end
 	}
 	
 	update(deltaTime) {
@@ -640,8 +642,6 @@ class GameState {
 		this.worldWidth = worldWidth;
 		this.worldHeight = worldHeight;
 		
-		GameState.directionalInputCodes;
-		
 		this.player = new Player(
 			new Vector2D(0, 0),
 			new Vector2D(this.worldWidth/2, this.worldHeight/2),
@@ -650,7 +650,7 @@ class GameState {
 		
 		this.bullets = [];
 		this.collectibles = [];
-		this.spatialHash = new SpatialHash( { x: this.worldWidth/2, y: this.worldHeight/2, w: this.worldWidth/2, h: this.worldHeight/2}, 20);
+		this.spatialHash = new SpatialHash( { x: this.worldWidth/2, y: this.worldHeight/2, w: this.worldWidth/2, h: this.worldHeight/2 }, 100); //200
 		
 		for (let i = 0; i < 100; i++) {
 			let cX = Math.floor(Math.random() * worldWidth);
@@ -660,7 +660,7 @@ class GameState {
 			this.spatialHash.insert(collectible);
 		}
 
-		//this.spatialHash.insert(this.player);
+		this.spatialHash.insert(this.player);
 		
 		this.prevTime = Date.now();
 	}
@@ -683,7 +683,7 @@ class GameState {
 		accumTime += Date.now() - currTime;
 		updateCount++;
 		if (updateCount >= 100) {
-			console.log(accumTime);
+			//console.log(accumTime);
 			updateCount = 0;
 		}
 	}
@@ -699,17 +699,30 @@ class GameState {
 	}
 	
 	updatePlayer(input, deltaTime) {
+		let preUpdateBucket = this.findBucket(this.player.position);
 		let adjustedPlayerVelocity = this.player.update(
 			deltaTime, 
 			input.keysPressed, 
 			input.mousePosition
 		);
+		let postUpdateBucket = this.findBucket(this.player.position);
 		if (!this.isWithinGameWorld(this.player.position)) {
 			this.player.position.sub(adjustedPlayerVelocity);
 			this.player.velocity.set(0, 0);
+			this.player.updateRange();
 		}
-		//this.player.updateRange();
-		//this.spatialHash.update(this.player);
+		if (preUpdateBucket.x !== postUpdateBucket.x || preUpdateBucket.y !== postUpdateBucket.y) {
+			this.spatialHash.update(this.player);
+		}
+	}
+
+	updateGameObject(gameObject, deltaTime) {
+		let preUpdateBucket = this.findBucket(gameObject.position);
+		gameObject.update(deltaTime);
+		let postUpdateBucket = this.findBucket(gameObject.position);
+		if (preUpdateBucket.x !== postUpdateBucket.x || preUpdateBucket.y !== postUpdateBucket.y) {
+			this.spatialHash.update(gameObject);
+		}
 	}
 	
 	updateBullets(input, deltaTime) {
@@ -717,19 +730,18 @@ class GameState {
 			let newBullet = this.player.fireWeapon();
 			if (newBullet !== null) {
 				this.bullets.push(newBullet);
-				//this.spatialHash.insert(newBullet);
+				this.spatialHash.insert(newBullet);
 			}
 		}
 		
 		for (let i = 0; i < this.bullets.length; i++) {
 			let bullet = this.bullets[i];
 			if (this.isWithinGameWorld(bullet.position)) {
-				bullet.update(deltaTime);
-				bullet.updateRange();
-				//this.spatialHash.update(bullet);
+				this.updateGameObject(bullet, deltaTime);
 			}
 			else {
 				this.bullets.splice(i, 1);
+				this.spatialHash.remove(bullet);
 				i--;
 			}
 		}
@@ -738,9 +750,7 @@ class GameState {
 	updateCollectibles(deltaTime) {
 		for (let i = 0; i < this.collectibles.length; i++) {
 			let collectible = this.collectibles[i];
-			collectible.update(deltaTime);
-			collectible.updateRange();
-			//this.spatialHash.update(collectible);
+			this.updateGameObject(collectible, deltaTime);
 		}
 	}
 	
@@ -758,7 +768,7 @@ class GameState {
 		}
 		/**/
 
-		/*
+		/* Brute force approach
 		for (let i = 0; i < this.bullets.length; i++) {
 			let bulletHitBox = this.bullets[i].getHitBox();
 			for (let j = 0; j < this.collectibles.length; j++) {
@@ -776,6 +786,14 @@ class GameState {
 		return 	position.x > 0 && position.x < this.worldWidth &&
 				position.y > 0 && position.y < this.worldHeight;
 	}
+
+	findBucket(position) {
+		let bucketSize = this.spatialHash.bucketSize;
+		return  {
+			bucketX: Math.ceil(Math.floor(position.x / bucketSize) / 2),
+			bucketY: Math.ceil(Math.floor(position.y / bucketSize) / 2)
+		};
+	}
 }
 
 module.exports = GameState;
@@ -789,9 +807,9 @@ var Rectangle = require('../lib/Rectangle');
 var Vector2D = require('../lib/Vector2D');
 var directionalInputCodes = require('../lib/directionalInputCodes');
 
-var DIAG_ACCEL_FACTOR = Math.cos(Math.PI/4);
-var DEGREES_90 = Math.PI/2;
-var DEGREES_270 = 3*Math.PI/2;
+const DIAG_ACCEL_FACTOR = Math.cos(Math.PI/4);
+const DEGREES_90 = Math.PI/2;
+const DEGREES_270 = 3*Math.PI/2;
 
 class Player extends GameObject {
 	constructor(velocity, position, color) {
@@ -860,6 +878,8 @@ class Player extends GameObject {
 		
 		let direction = new Vector2D().copy(mousePosition).sub(this.position);
 		this.orientation = this.convertToOrientation(direction);
+
+		this.updateRange();
 		
 		return adjustedPlayerVelocity;
 	}
@@ -954,9 +974,9 @@ class Weapon extends GameObject {
 		}
 	}
 	
-	update(deltaTime) {
-		
-	}
+	/* never gets called *
+	update(deltaTime) {}
+	*/
 	
 	draw(ctx) {
 		ctx.transform(1, 0, 0, 1, this.position.x, this.position.y);

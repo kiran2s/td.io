@@ -14,6 +14,7 @@ class Collectible extends GameObject {
 	
 	update(deltaTime) {
 		this.orientation += this.rotationSpeed * deltaTime;
+		this.updateRange();
 	}
 	
 	draw(ctx) {

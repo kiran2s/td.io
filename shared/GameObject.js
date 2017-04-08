@@ -14,15 +14,15 @@ class GameObject {
 		this.size = size;
 		this.color = color;
 
-		// spatialhash-2d variables
+		// spatialhash-2d variables begin
 		this.range = {
 			x: this.position.x,
 			y: this.position.y,
 			w: this.size/2,
 			h: this.size/2
 		};
-
 		this.__b = undefined;
+		// spatialhash-2d variables end
 	}
 	
 	update(deltaTime) {

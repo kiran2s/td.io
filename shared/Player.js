@@ -6,9 +6,9 @@ var Rectangle = require('../lib/Rectangle');
 var Vector2D = require('../lib/Vector2D');
 var directionalInputCodes = require('../lib/directionalInputCodes');
 
-var DIAG_ACCEL_FACTOR = Math.cos(Math.PI/4);
-var DEGREES_90 = Math.PI/2;
-var DEGREES_270 = 3*Math.PI/2;
+const DIAG_ACCEL_FACTOR = Math.cos(Math.PI/4);
+const DEGREES_90 = Math.PI/2;
+const DEGREES_270 = 3*Math.PI/2;
 
 class Player extends GameObject {
 	constructor(velocity, position, color) {
@@ -77,6 +77,8 @@ class Player extends GameObject {
 		
 		let direction = new Vector2D().copy(mousePosition).sub(this.position);
 		this.orientation = this.convertToOrientation(direction);
+
+		this.updateRange();
 		
 		return adjustedPlayerVelocity;
 	}

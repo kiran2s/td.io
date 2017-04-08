@@ -49,9 +49,9 @@ class Weapon extends GameObject {
 		}
 	}
 	
-	update(deltaTime) {
-		
-	}
+	/* never gets called *
+	update(deltaTime) {}
+	*/
 	
 	draw(ctx) {
 		ctx.transform(1, 0, 0, 1, this.position.x, this.position.y);
