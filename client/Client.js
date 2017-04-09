@@ -14,7 +14,6 @@ class Client {
 		this.canvas.height = window.innerHeight;
 		
 		this.ctx = this.canvas.getContext('2d');
-		this.ctx.font = '11px "Helvetica"';
 
 		this.gamestate = new GameState(this.canvas.width, this.canvas.height);
 		
@@ -25,7 +24,7 @@ class Client {
 	}
 	
 	run() {
-		setInterval(this.gameStateUpdate.bind(this), 15);
+		this.gameStateUpdateID = setInterval(this.gameStateUpdate.bind(this), 15);
 		window.requestAnimationFrame(this.drawUpdate.bind(this));
 	}
 	
@@ -53,15 +52,35 @@ class Client {
 			isMouseLeftButtonDown: mouseLeftButtonDown
 		};
 		
-		this.gamestate.update(input);
+		let playState = false;
+		if (this.gamestate !== undefined) {
+			playState = this.gamestate.update(input);
+		}
+		else {
+			if (mouseLeftButtonDown || 'space' in keys) {
+				this.gamestate = new GameState(this.canvas.width, this.canvas.height);
+				playState = true;
+				window.requestAnimationFrame(this.drawUpdate.bind(this));
+			}
+		}
+
+		if (!playState) {
+			this.gamestate = undefined;
+		}
 	}
 	
 	drawUpdate() {
 		this.ctx.setTransform(1, 0, 0, 1, 0, 0);
 		this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
 		
+		if (this.gamestate === undefined) {
+			this.ctx.fillStyle = "red";
+			this.ctx.font = '100px Arial';
+			this.ctx.fillText("YOU DEAD", this.canvas.width/3, this.canvas.height/2);
+			return;
+		}
+
 		this.gamestate.draw(this.ctx);
-		
 		window.requestAnimationFrame(this.drawUpdate.bind(this));
 	}
 	

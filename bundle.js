@@ -15,7 +15,6 @@ class Client {
 		this.canvas.height = window.innerHeight;
 		
 		this.ctx = this.canvas.getContext('2d');
-		this.ctx.font = '11px "Helvetica"';
 
 		this.gamestate = new GameState(this.canvas.width, this.canvas.height);
 		
@@ -26,7 +25,7 @@ class Client {
 	}
 	
 	run() {
-		setInterval(this.gameStateUpdate.bind(this), 15);
+		this.gameStateUpdateID = setInterval(this.gameStateUpdate.bind(this), 15);
 		window.requestAnimationFrame(this.drawUpdate.bind(this));
 	}
 	
@@ -54,15 +53,35 @@ class Client {
 			isMouseLeftButtonDown: mouseLeftButtonDown
 		};
 		
-		this.gamestate.update(input);
+		let playState = false;
+		if (this.gamestate !== undefined) {
+			playState = this.gamestate.update(input);
+		}
+		else {
+			if (mouseLeftButtonDown || 'space' in keys) {
+				this.gamestate = new GameState(this.canvas.width, this.canvas.height);
+				playState = true;
+				window.requestAnimationFrame(this.drawUpdate.bind(this));
+			}
+		}
+
+		if (!playState) {
+			this.gamestate = undefined;
+		}
 	}
 	
 	drawUpdate() {
 		this.ctx.setTransform(1, 0, 0, 1, 0, 0);
 		this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
 		
+		if (this.gamestate === undefined) {
+			this.ctx.fillStyle = "red";
+			this.ctx.font = '100px Arial';
+			this.ctx.fillText("YOU DEAD", this.canvas.width/3, this.canvas.height/2);
+			return;
+		}
+
 		this.gamestate.draw(this.ctx);
-		
 		window.requestAnimationFrame(this.drawUpdate.bind(this));
 	}
 	
@@ -676,13 +695,15 @@ class GameState {
 		this.updateCollectibles(deltaTime);
 
 		this.detectCollisions();
-	
+
 		accumTime += Date.now() - currTime;
 		updateCount++;
 		if (updateCount >= 100) {
 			//console.log(accumTime);
 			updateCount = 0;
 		}
+
+		return this.player.health > 0;
 	}
 	
 	draw(ctx) {
@@ -806,9 +827,10 @@ class GameState {
 				this.spatialHash.remove(collectible);
 
 				this.player.takeDamage(collectible.damage);
-				console.log(this.player.health);
+				//console.log(this.player.health);
 				if (this.player.health <= 0) {
 					this.spatialHash.remove(this.player);
+					
 				}
 			}
 		}
@@ -858,11 +880,46 @@ class GameState {
 
 module.exports = GameState;
 
-},{"../lib/Vector2D":6,"./Collectible":9,"./Player":12,"spatialhash-2d":7}],12:[function(require,module,exports){
+},{"../lib/Vector2D":6,"./Collectible":9,"./Player":13,"spatialhash-2d":7}],12:[function(require,module,exports){
+'use strict';
+
+var GameObject = require('./GameObject');
+var Rectangle = require('../lib/Rectangle');
+var Vector2D = require('../lib/Vector2D');
+
+class HealthBar extends GameObject {
+	constructor(position, size) {
+		super(new Vector2D(0, 0), position, size, 'rgba(0,215,100,1)');
+        this.outlineColor = 'rgba(80,80,80,1)';
+        this.halfLength = this.size/2;
+        this.width = 6;
+        this.percent = 100;
+    }
+
+    update(health) {
+        this.percent = health;
+    }
+
+    draw(ctx) {
+		ctx.transform(1, 0, 0, 1, this.position.x - this.halfLength, this.position.y);
+		ctx.fillStyle = this.outlineColor;
+        ctx.fillRect(0, 0, this.size, this.width);
+        ctx.fillStyle = this.color;
+		ctx.fillRect(0, 0, (this.size * this.percent) / 100, this.width);
+		ctx.strokeStyle = this.outlineColor;
+		ctx.lineWidth = 2;
+		ctx.strokeRect(0, 0, this.size, this.width);
+    }
+}
+
+module.exports = HealthBar;
+
+},{"../lib/Rectangle":4,"../lib/Vector2D":6,"./GameObject":10}],13:[function(require,module,exports){
 'use strict';
 
 var GameObject = require('./GameObject');
 var WeaponFactory = require('./Weapon').WeaponFactory;
+var HealthBar = require('./HealthBar');
 var Rectangle = require('../lib/Rectangle');
 var Vector2D = require('../lib/Vector2D');
 
@@ -883,6 +940,7 @@ class Player extends GameObject {
 		this.orientation = 0;
 		this.health = 100;
 		this.weapon = WeaponFactory.makePlebPistol(new Vector2D(this.radius, -this.radius/2));
+		this.healthBar = new HealthBar(new Vector2D(0, this.radius + 12), this.radius * 2.5);
 	}
 	
 	update(deltaTime, keysPressed, mousePosition) {
@@ -938,6 +996,8 @@ class Player extends GameObject {
 		let direction = new Vector2D().copy(mousePosition).sub(this.position);
 		this.orientation = this.convertToOrientation(direction);
 
+		this.healthBar.update(this.health);
+
 		this.updateRange();
 		
 		return adjustedPlayerVelocity;
@@ -949,10 +1009,13 @@ class Player extends GameObject {
 		ctx.arc(this.position.x, this.position.y, this.radius, 0, 2*Math.PI);
 		ctx.fillStyle = this.color;
 		ctx.fill();
-		
+
 		ctx.setTransform(1, 0, 0, 1, this.position.x, this.position.y);
 		ctx.rotate(this.orientation);
 		this.weapon.draw(ctx);
+
+		ctx.setTransform(1, 0, 0, 1, this.position.x, this.position.y);
+		this.healthBar.draw(ctx);
 		
 		ctx.setTransform(1, 0, 0, 1, 0, 0);
 		ctx.beginPath();
@@ -981,7 +1044,7 @@ class Player extends GameObject {
 
 module.exports = Player;
 
-},{"../lib/Rectangle":4,"../lib/Vector2D":6,"./GameObject":10,"./Weapon":13}],13:[function(require,module,exports){
+},{"../lib/Rectangle":4,"../lib/Vector2D":6,"./GameObject":10,"./HealthBar":12,"./Weapon":14}],14:[function(require,module,exports){
 'use strict';
 
 var GameObject = require('./GameObject');

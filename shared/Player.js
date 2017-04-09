@@ -2,6 +2,7 @@
 
 var GameObject = require('./GameObject');
 var WeaponFactory = require('./Weapon').WeaponFactory;
+var HealthBar = require('./HealthBar');
 var Rectangle = require('../lib/Rectangle');
 var Vector2D = require('../lib/Vector2D');
 
@@ -22,6 +23,7 @@ class Player extends GameObject {
 		this.orientation = 0;
 		this.health = 100;
 		this.weapon = WeaponFactory.makePlebPistol(new Vector2D(this.radius, -this.radius/2));
+		this.healthBar = new HealthBar(new Vector2D(0, this.radius + 12), this.radius * 2.5);
 	}
 	
 	update(deltaTime, keysPressed, mousePosition) {
@@ -77,6 +79,8 @@ class Player extends GameObject {
 		let direction = new Vector2D().copy(mousePosition).sub(this.position);
 		this.orientation = this.convertToOrientation(direction);
 
+		this.healthBar.update(this.health);
+
 		this.updateRange();
 		
 		return adjustedPlayerVelocity;
@@ -88,10 +92,13 @@ class Player extends GameObject {
 		ctx.arc(this.position.x, this.position.y, this.radius, 0, 2*Math.PI);
 		ctx.fillStyle = this.color;
 		ctx.fill();
-		
+
 		ctx.setTransform(1, 0, 0, 1, this.position.x, this.position.y);
 		ctx.rotate(this.orientation);
 		this.weapon.draw(ctx);
+
+		ctx.setTransform(1, 0, 0, 1, this.position.x, this.position.y);
+		this.healthBar.draw(ctx);
 		
 		ctx.setTransform(1, 0, 0, 1, 0, 0);
 		ctx.beginPath();

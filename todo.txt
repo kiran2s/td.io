@@ -1,6 +1,4 @@
-- Health bar
-
-- Add you died text and restart functionality
+- Review Client.js
 
 - Press space for a dash (reduces health)
 

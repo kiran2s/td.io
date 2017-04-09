@@ -50,13 +50,15 @@ class GameState {
 		this.updateCollectibles(deltaTime);
 
 		this.detectCollisions();
-	
+
 		accumTime += Date.now() - currTime;
 		updateCount++;
 		if (updateCount >= 100) {
 			//console.log(accumTime);
 			updateCount = 0;
 		}
+
+		return this.player.health > 0;
 	}
 	
 	draw(ctx) {
@@ -183,6 +185,7 @@ class GameState {
 				//console.log(this.player.health);
 				if (this.player.health <= 0) {
 					this.spatialHash.remove(this.player);
+					
 				}
 			}
 		}
