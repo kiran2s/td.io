@@ -7,9 +7,11 @@ var Vector2D = require('../lib/Vector2D');
 const DEGREES_360 = 2*Math.PI;
 
 class Bullet extends GameObject {
-	constructor(velocity, position, radius = 7, color = "black", outlineColor = 'rgba(80,80,80,1)') {
+	constructor(velocity, position, radius = 7, damage = 40, health = 1, color = "black", outlineColor = 'rgba(80,80,80,1)') {
 		super(velocity, position, radius*2, color);
 		this.radius = radius;
+		this.health = health;
+		this.damage = damage;
 		this.outlineColor = outlineColor;
 	}
 	

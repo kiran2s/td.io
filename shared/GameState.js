@@ -20,7 +20,6 @@ class GameState {
 		this.bullets = [];
 		this.collectibles = [];
 		this.spatialHash = new SpatialHash( { x: this.worldWidth/2, y: this.worldHeight/2, w: this.worldWidth/2, h: this.worldHeight/2 }, 80);
-		console.log(this.spatialHash.bucketSize);
 		
 		for (let i = 0; i < 100; i++) {
 			let cX = Math.floor(Math.random() * worldWidth);
@@ -44,7 +43,9 @@ class GameState {
 		let deltaTime = (currTime - this.prevTime) / 1000;
 		this.prevTime = currTime;
 		
-		this.updatePlayer(input, deltaTime);
+		if (this.player.health > 0) {
+			this.updatePlayer(input, deltaTime);
+		}
 		this.updateBullets(input, deltaTime);
 		this.updateCollectibles(deltaTime);
 
@@ -58,8 +59,10 @@ class GameState {
 		}
 	}
 	
-	draw(ctx) {		
-		this.player.draw(ctx);
+	draw(ctx) {
+		if (this.player.health > 0) {	
+			this.player.draw(ctx);
+		}
 		for (let i = 0; i < this.bullets.length; i++) {
 			this.bullets[i].draw(ctx);
 		}
@@ -126,11 +129,13 @@ class GameState {
 	}
 	
 	updateBullets(input, deltaTime) {
-		if (input.isMouseLeftButtonDown) {
-			let newBullet = this.player.fireWeapon();
-			if (newBullet !== null) {
-				this.bullets.push(newBullet);
-				this.spatialHash.insert(newBullet);
+		if (this.player.health > 0) {
+			if (input.isMouseLeftButtonDown) {
+				let newBullet = this.player.fireWeapon();
+				if (newBullet !== null) {
+					this.bullets.push(newBullet);
+					this.spatialHash.insert(newBullet);
+				}
 			}
 		}
 		
@@ -166,13 +171,19 @@ class GameState {
 				this.spatialHash.remove(collectible);
 			}
 		}
-		{
+		if (this.player.health > 0) {
 			let intersectList = this.spatialHash.query(this.player.range, function(item) { return item.constructor.name === 'Collectible'; });
 			if (intersectList.length > 0) {
 				let j = this.collectibles.findIndex(function(c) { return JSON.stringify(intersectList[0]) === JSON.stringify(c); });
 				let collectible = this.collectibles[j];
 				this.collectibles.splice(j, 1);
 				this.spatialHash.remove(collectible);
+
+				this.player.takeDamage(collectible.damage);
+				//console.log(this.player.health);
+				if (this.player.health <= 0) {
+					this.spatialHash.remove(this.player);
+				}
 			}
 		}
 		/**/

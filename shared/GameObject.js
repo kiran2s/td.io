@@ -46,6 +46,12 @@ class GameObject {
 		this.range.x = this.position.x;
 		this.range.y = this.position.y;
 	}
+
+	takeDamage(dmgAmt) {
+		if (this.hasOwnProperty("health")) {
+			this.health -= dmgAmt;
+		}
+	}
 }
 
 module.exports = GameObject;

@@ -4,7 +4,6 @@ var GameObject = require('./GameObject');
 var WeaponFactory = require('./Weapon').WeaponFactory;
 var Rectangle = require('../lib/Rectangle');
 var Vector2D = require('../lib/Vector2D');
-var directionalInputCodes = require('../lib/directionalInputCodes');
 
 const DIAG_ACCEL_FACTOR = Math.cos(Math.PI/4);
 const DEGREES_90 = Math.PI/2;
@@ -25,45 +24,45 @@ class Player extends GameObject {
 		this.weapon = WeaponFactory.makePlebPistol(new Vector2D(this.radius, -this.radius/2));
 	}
 	
-	update(deltaTime, directionalInput, mousePosition) {
+	update(deltaTime, keysPressed, mousePosition) {
 		let acceleration = new Vector2D(0, 0);
-		if (directionalInput.length === 2) {
+		if (keysPressed.numDirKeysPressed === 2) {
 			let axisAcceleration = this.acceleration * DIAG_ACCEL_FACTOR;
-			if (directionalInput === directionalInputCodes.up_left) {
+			if ('W' in keysPressed && 'A' in keysPressed) {
 				acceleration.set(-axisAcceleration, -axisAcceleration);
 			}
-			else if (directionalInput === directionalInputCodes.down_left) {
+			else if ('S' in keysPressed && 'A' in keysPressed) {
 				acceleration.set(-axisAcceleration, axisAcceleration);
 			}
-			else if (directionalInput === directionalInputCodes.down_right) {
+			else if ('S' in keysPressed && 'D' in keysPressed) {
 				acceleration.set(axisAcceleration, axisAcceleration);
 			}
-			else if (directionalInput === directionalInputCodes.up_right) {
+			else if ('W' in keysPressed && 'D' in keysPressed) {
 				acceleration.set(axisAcceleration, -axisAcceleration);
 			}
 		}
-		else {
-			if (directionalInput === directionalInputCodes.up) {
+		else if (keysPressed.numDirKeysPressed === 1){
+			if ('W' in keysPressed) {
 				acceleration.y = -this.acceleration;
 			}
-			else if (directionalInput === directionalInputCodes.left) {
+			else if ('A' in keysPressed) {
 				acceleration.x = -this.acceleration;
 			}
-			else if (directionalInput === directionalInputCodes.down) {
+			else if ('S' in keysPressed) {
 				acceleration.y = this.acceleration;
 			}
-			else if (directionalInput === directionalInputCodes.right) {
+			else if ('D' in keysPressed) {
 				acceleration.x = this.acceleration;
 			}
+		}
+		else {
+			if (this.velocity.getLength() < this.minSpeed) {
+				this.velocity.set(0, 0);
+			}
 			else {
-				if (this.velocity.getLength() < this.minSpeed) {
-					this.velocity.set(0, 0);
-				}
-				else {
-					acceleration.copy(this.velocity)
-								.setLength(this.deceleration)
-								.neg();
-				}
+				acceleration.copy(this.velocity)
+							.setLength(this.deceleration)
+							.neg();
 			}
 		}
 		

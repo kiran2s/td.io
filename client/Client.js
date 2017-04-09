@@ -30,18 +30,17 @@ class Client {
 	}
 	
 	gameStateUpdate() {
-		var keys = "";
-		if (this.keyboard.pressed('W')) {
-			keys += 'W';
+		let keys = { numDirKeysPressed: 0 };
+		let dirKeys = "WASD";
+		for (let i = 0; i < 4; i++) {
+			let currKey = dirKeys[i];
+			if (this.keyboard.pressed(currKey)) {
+				keys[currKey] = true;
+				keys.numDirKeysPressed++;
+			}
 		}
-		if (this.keyboard.pressed('A')) {
-			keys += 'A';
-		}
-		if (this.keyboard.pressed('S')) {
-			keys += 'S';
-		}
-		if (this.keyboard.pressed('D')) {
-			keys += 'D';
+		if (this.keyboard.pressed('space')) {
+			keys['space'] = true;
 		}
 		
 		let mousePos = new Vector2D(this.mouse.x, this.mouse.y);

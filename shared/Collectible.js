@@ -5,10 +5,12 @@ var Rectangle = require('../lib/Rectangle');
 var Vector2D = require('../lib/Vector2D');
 
 class Collectible extends GameObject {
-	constructor(position) {
+	constructor(position, health = 100, damage = 10) {
 		super(new Vector2D(0, 0), position, 20, "orange");
 		this.orientation = 0;
 		this.rotationSpeed = 2;
+		this.health = health;
+		this.damage = damage;
 		this.outlineColor = 'rgba(80,80,80,1)';
 	}
 	

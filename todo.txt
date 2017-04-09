@@ -1,8 +1,6 @@
-- collisions should reduce health
-
-- Improve client code for keys pressed
-
 - Health bar
+
+- Add you died text and restart functionality
 
 - Press space for a dash (reduces health)
 
@@ -68,7 +66,7 @@ spatial hash:
 - performance hit due to having to update hash objects
 	- amplifies when moving cursor around for some reason
 
------------------------------------------------------------------------sd
+-----------------------------------------------------------------------
 
 - d3-quadtree:
 var d3 = require("d3-quadtree");

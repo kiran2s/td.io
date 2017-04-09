@@ -9,6 +9,8 @@ class Weapon extends GameObject {
 		position, 
 		size, 
 		color, 
+		bulletDamage, 
+		bulletHealth, 
 		bulletSpeed, 
 		fireRate, 
 		bulletSpread, 
@@ -18,6 +20,8 @@ class Weapon extends GameObject {
 	) {
 		super(new Vector2D(0, 0), position, size, color);
 		this.outlineColor = 'rgba(80,80,80,1)';
+		this.bulletDamage = bulletDamage;
+		this.bulletHealth = bulletHealth;
 		this.bulletSpeed = bulletSpeed;
 		this.msPerBullet = 1000/fireRate;
 		this.bulletSpread = bulletSpread * Math.PI/180;
@@ -40,6 +44,8 @@ class Weapon extends GameObject {
 				bulletVelocity,
 				bulletPosition,
 				this.bulletRadius,
+				this.bulletDamage,
+				this.bulletHealth,
 				this.bulletColor,
 				this.bulletOutlineColor
 			);
@@ -76,13 +82,13 @@ class Weapon extends GameObject {
 // dark grey: 'rgba(80,80,80,1)'
 var WeaponFactory = {
 	makePlebPistol: function(position) {
-		return new Weapon(position, 20, "red", 350, 3, 12, 8, 'rgba(255,128,0,1)', 'rgba(80,80,80,1)');
+		return new Weapon(position, 20, "red", 40, 1, 350, 3, 12, 8, 'rgba(255,128,0,1)', 'rgba(80,80,80,1)');
 	},
 	makeLavaPisser: function(position) {
-		return new Weapon(position, 20, "red", 225, 1000, 6, 10, 'rgba(255,85,0,1)', 'rgba(255,0,0,1)');
+		return new Weapon(position, 20, "red", 5, 1, 225, 1000, 6, 10, 'rgba(255,85,0,1)', 'rgba(255,0,0,1)');
 	},
 	makeVolcano: function(position) {
-		return new Weapon(position, 20, "red", 150, 1000, 60, 10, 'rgba(255,85,0,1)', 'rgba(255,0,0,1)');
+		return new Weapon(position, 20, "red", 5, 1, 150, 1000, 60, 10, 'rgba(255,85,0,1)', 'rgba(255,0,0,1)');
 	}
 };
 
