@@ -1,16 +1,11 @@
-- Review GameState.js
-
-- Update detectCollisions
-
-- Improve performance
-	- Improve collision detection code
-		- reduce number of updates as much as possible
-		- player-object collisions
-		- collisions should reduce health
+- collisions should reduce health
 
 - Improve client code for keys pressed
 
 - Health bar
+
+- Press space for a dash (reduces health)
+
 - Client/Server interaction
 
 - Add comments

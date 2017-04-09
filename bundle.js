@@ -647,10 +647,10 @@ class GameState {
 			new Vector2D(this.worldWidth/2, this.worldHeight/2),
 			'rgba(0,180,255,1)'
 		);
-		
 		this.bullets = [];
 		this.collectibles = [];
-		this.spatialHash = new SpatialHash( { x: this.worldWidth/2, y: this.worldHeight/2, w: this.worldWidth/2, h: this.worldHeight/2 }, 100); //200
+		this.spatialHash = new SpatialHash( { x: this.worldWidth/2, y: this.worldHeight/2, w: this.worldWidth/2, h: this.worldHeight/2 }, 80);
+		console.log(this.spatialHash.bucketSize);
 		
 		for (let i = 0; i < 100; i++) {
 			let cX = Math.floor(Math.random() * worldWidth);
@@ -699,28 +699,58 @@ class GameState {
 	}
 	
 	updatePlayer(input, deltaTime) {
-		let preUpdateBucket = this.findBucket(this.player.position);
+		let preUpdateBuckets = this.findBuckets(this.player);
 		let adjustedPlayerVelocity = this.player.update(
 			deltaTime, 
 			input.keysPressed, 
 			input.mousePosition
 		);
-		let postUpdateBucket = this.findBucket(this.player.position);
 		if (!this.isWithinGameWorld(this.player.position)) {
 			this.player.position.sub(adjustedPlayerVelocity);
 			this.player.velocity.set(0, 0);
 			this.player.updateRange();
 		}
-		if (preUpdateBucket.x !== postUpdateBucket.x || preUpdateBucket.y !== postUpdateBucket.y) {
+		let postUpdateBuckets = this.findBuckets(this.player);
+		if (this.areBucketsDifferent(preUpdateBuckets, postUpdateBuckets)) {
 			this.spatialHash.update(this.player);
 		}
+
+		/* DEBUG
+		let hash = this.spatialHash.hashes;
+		let preHash = '';
+		for (let i = 0; i < Math.floor(this.worldWidth/this.spatialHash.bucketSize) + 1; i++) {
+			for (let j = 0; j < Math.floor(this.worldHeight/this.spatialHash.bucketSize) + 1; j++) {
+				if (hash[i.toString()][j.toString()].length > 0) {
+					preHash += '(' + i + ',' + j + ') ';
+				}
+			}
+		}
+
+		this.spatialHash.update(this.player);
+		
+		let postHash = '';
+		for (let i = 0; i < Math.floor(this.worldWidth/this.spatialHash.bucketSize) + 1; i++) {
+			for (let j = 0; j < Math.floor(this.worldHeight/this.spatialHash.bucketSize) + 1; j++) {
+				if (hash[i.toString()][j.toString()].length > 0) {
+					postHash += '(' + i + ',' + j + ') ';
+				}
+			}
+		}
+
+		console.log(this.player.position.x + ',' + this.player.position.y);
+		console.log(preUpdateBuckets.bucketsX[0] + ',' + preUpdateBuckets.bucketsY[0] + '  ' + preUpdateBuckets.bucketsX[1] + ',' + preUpdateBuckets.bucketsY[1]);
+		console.log(postUpdateBuckets.bucketsX[0] + ',' + postUpdateBuckets.bucketsY[0] + '  ' + postUpdateBuckets.bucketsX[1] + ',' + postUpdateBuckets.bucketsY[1]);
+		console.log(preHash);
+		console.log(postHash);
+		console.log("");
+		*/
 	}
 
 	updateGameObject(gameObject, deltaTime) {
-		let preUpdateBucket = this.findBucket(gameObject.position);
+		let preUpdateBuckets = this.findBuckets(gameObject);
 		gameObject.update(deltaTime);
-		let postUpdateBucket = this.findBucket(gameObject.position);
-		if (preUpdateBucket.x !== postUpdateBucket.x || preUpdateBucket.y !== postUpdateBucket.y) {
+		let postUpdateBuckets = this.findBuckets(gameObject);
+		if (this.areBucketsDifferent(preUpdateBuckets, postUpdateBuckets)) {
 			this.spatialHash.update(gameObject);
 		}
 	}
@@ -755,7 +785,7 @@ class GameState {
 	}
 	
 	detectCollisions() {
-		/**/
+		/* Spatial hash approach */
 		for (let i = 0; i < this.bullets.length; i++) {
 			let bullet = this.bullets[i];
 			let intersectList = this.spatialHash.query(bullet.range, function(item) { return item.constructor.name === 'Collectible'; });
@@ -766,9 +796,18 @@ class GameState {
 				this.spatialHash.remove(collectible);
 			}
 		}
+		{
+			let intersectList = this.spatialHash.query(this.player.range, function(item) { return item.constructor.name === 'Collectible'; });
+			if (intersectList.length > 0) {
+				let j = this.collectibles.findIndex(function(c) { return JSON.stringify(intersectList[0]) === JSON.stringify(c); });
+				let collectible = this.collectibles[j];
+				this.collectibles.splice(j, 1);
+				this.spatialHash.remove(collectible);
+			}
+		}
 		/**/
 
-		/* Brute force approach
+		/* Brute force approach */ /*
 		for (let i = 0; i < this.bullets.length; i++) {
 			let bulletHitBox = this.bullets[i].getHitBox();
 			for (let j = 0; j < this.collectibles.length; j++) {
@@ -787,12 +826,26 @@ class GameState {
 				position.y > 0 && position.y < this.worldHeight;
 	}
 
-	findBucket(position) {
+	findBuckets(gameObject) {
 		let bucketSize = this.spatialHash.bucketSize;
-		return  {
-			bucketX: Math.ceil(Math.floor(position.x / bucketSize) / 2),
-			bucketY: Math.ceil(Math.floor(position.y / bucketSize) / 2)
-		};
+		let positionX = gameObject.position.x;
+		let positionY = gameObject.position.y;
+		let halfWidth = gameObject.range.w;
+		let halfHeight = gameObject.range.h;
+
+		let firstBucketX = Math.floor((positionX - halfWidth) / bucketSize);
+		let lastBucketX = Math.floor((positionX + halfWidth) / bucketSize);
+		let firstBucketY = Math.floor((positionY - halfHeight) / bucketSize);
+		let lastBucketY = Math.floor((positionY + halfHeight) / bucketSize);
+
+		return { bucketsX: [ firstBucketX, lastBucketX ], bucketsY: [ firstBucketY, lastBucketY ] };
+	}
+
+	areBucketsDifferent(b1, b2) {
+		return 	b1.bucketsX[0] !== b2.bucketsX[0] ||
+				b1.bucketsX[1] !== b2.bucketsX[1] ||
+				b1.bucketsY[0] !== b2.bucketsY[0] ||
+				b1.bucketsY[1] !== b2.bucketsY[1];
 	}
 }
 
