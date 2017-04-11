@@ -84,6 +84,7 @@ class Client {
 		window.requestAnimationFrame(this.drawUpdate.bind(this));
 	}
 	
+	// TODO: gamestate should not be updated
 	onWindowResize(event) {
 		this.canvas.width = window.innerWidth;
 		this.canvas.height = window.innerHeight;

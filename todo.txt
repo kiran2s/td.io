@@ -1,3 +1,7 @@
+- Move bullets to Weapon class
+- Implement camera
+	- Review 3D graphics projects
+	- World size should be independent from screen size
 - Client/Server interaction
 
 - Add comments
