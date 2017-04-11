@@ -553,17 +553,32 @@ var GameObject = require('./GameObject');
 var Rectangle = require('../lib/Rectangle');
 var Vector2D = require('../lib/Vector2D');
 
+var DEGREES_360 = 2*Math.PI;
+
 class Collectible extends GameObject {
-	constructor(position, health = 100, damage = 10) {
+	constructor(position, health = 100, damage = 10, speed = 10) {
 		super(new Vector2D(0, 0), position, 20, "orange");
-		this.orientation = 0;
-		this.rotationSpeed = 2;
+		this.orientation = Math.random() * DEGREES_360;
+		this.movementAngle = this.orientation;
+		this.movementSpread = Math.PI/16;
+		this.rotationSpeed = 1;
 		this.health = health;
 		this.damage = damage;
+		this.speed = speed;
 		this.outlineColor = 'rgba(80,80,80,1)';
 	}
 	
 	update(deltaTime) {
+		this.movementAngle = this.movementAngle + (Math.random() * this.movementSpread - this.movementSpread/2);
+		if (this.movementAngle > DEGREES_360) {
+			this.movementAngle -= DEGREES_360;
+		}
+		else if (this.movementAngle < 0) {
+			this.movementAngle += DEGREES_360
+		}
+		this.velocity.set(Math.cos(this.movementAngle), Math.sin(this.movementAngle)).setLength(this.speed);
+		let adjustedVelocity = new Vector2D().copy(this.velocity).mul(deltaTime);
+		this.position.add(adjustedVelocity);
 		this.orientation += this.rotationSpeed * deltaTime;
 		this.updateRange();
 	}
@@ -766,12 +781,23 @@ class GameState {
 		*/
 	}
 
-	updateGameObject(gameObject, deltaTime) {
-		let preUpdateBuckets = this.findBuckets(gameObject);
-		gameObject.update(deltaTime);
-		let postUpdateBuckets = this.findBuckets(gameObject);
-		if (this.areBucketsDifferent(preUpdateBuckets, postUpdateBuckets)) {
-			this.spatialHash.update(gameObject);
+	updateGameObjects(gameObjects, deltaTime) {
+		for (let i = 0; i < gameObjects.length; i++) {
+			let gameObject = gameObjects[i];
+			if (this.isWithinGameWorld(gameObject.position)) {
+				let preUpdateBuckets = this.findBuckets(gameObject);
+				gameObject.update(deltaTime);
+				let postUpdateBuckets = this.findBuckets(gameObject);
+				if (this.areBucketsDifferent(preUpdateBuckets, postUpdateBuckets)) {
+					this.spatialHash.update(gameObject);
+				}
+			}
+			else {
+				gameObjects.splice(i, 1);
+				this.spatialHash.remove(gameObject);
+				console.log(gameObject.constructor.name + ' ' + gameObjects.length);
+				i--;
+			}
 		}
 	}
 	
@@ -786,24 +812,11 @@ class GameState {
 			}
 		}
 		
-		for (let i = 0; i < this.bullets.length; i++) {
-			let bullet = this.bullets[i];
-			if (this.isWithinGameWorld(bullet.position)) {
-				this.updateGameObject(bullet, deltaTime);
-			}
-			else {
-				this.bullets.splice(i, 1);
-				this.spatialHash.remove(bullet);
-				i--;
-			}
-		}
+		this.updateGameObjects(this.bullets, deltaTime);
 	}
 	
 	updateCollectibles(deltaTime) {
-		for (let i = 0; i < this.collectibles.length; i++) {
-			let collectible = this.collectibles[i];
-			this.updateGameObject(collectible, deltaTime);
-		}
+		this.updateGameObjects(this.collectibles, deltaTime);
 	}
 	
 	detectCollisions() {

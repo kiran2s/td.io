@@ -1,4 +1,4 @@
-- Review Client.js
+- Globals
 
 - Press space for a dash (reduces health)
 

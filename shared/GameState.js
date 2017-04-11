@@ -121,12 +121,22 @@ class GameState {
 		*/
 	}
 
-	updateGameObject(gameObject, deltaTime) {
-		let preUpdateBuckets = this.findBuckets(gameObject);
-		gameObject.update(deltaTime);
-		let postUpdateBuckets = this.findBuckets(gameObject);
-		if (this.areBucketsDifferent(preUpdateBuckets, postUpdateBuckets)) {
-			this.spatialHash.update(gameObject);
+	updateGameObjects(gameObjects, deltaTime) {
+		for (let i = 0; i < gameObjects.length; i++) {
+			let gameObject = gameObjects[i];
+			if (this.isWithinGameWorld(gameObject.position)) {
+				let preUpdateBuckets = this.findBuckets(gameObject);
+				gameObject.update(deltaTime);
+				let postUpdateBuckets = this.findBuckets(gameObject);
+				if (this.areBucketsDifferent(preUpdateBuckets, postUpdateBuckets)) {
+					this.spatialHash.update(gameObject);
+				}
+			}
+			else {
+				gameObjects.splice(i, 1);
+				this.spatialHash.remove(gameObject);
+				i--;
+			}
 		}
 	}
 	
@@ -141,24 +151,11 @@ class GameState {
 			}
 		}
 		
-		for (let i = 0; i < this.bullets.length; i++) {
-			let bullet = this.bullets[i];
-			if (this.isWithinGameWorld(bullet.position)) {
-				this.updateGameObject(bullet, deltaTime);
-			}
-			else {
-				this.bullets.splice(i, 1);
-				this.spatialHash.remove(bullet);
-				i--;
-			}
-		}
+		this.updateGameObjects(this.bullets, deltaTime);
 	}
 	
 	updateCollectibles(deltaTime) {
-		for (let i = 0; i < this.collectibles.length; i++) {
-			let collectible = this.collectibles[i];
-			this.updateGameObject(collectible, deltaTime);
-		}
+		this.updateGameObjects(this.collectibles, deltaTime);
 	}
 	
 	detectCollisions() {
