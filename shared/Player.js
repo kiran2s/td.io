@@ -5,10 +5,9 @@ var WeaponFactory = require('./Weapon').WeaponFactory;
 var HealthBar = require('./HealthBar');
 var Rectangle = require('../lib/Rectangle');
 var Vector2D = require('../lib/Vector2D');
+var Globals = require('../lib/Globals');
 
 const DIAG_ACCEL_FACTOR = Math.cos(Math.PI/4);
-const DEGREES_90 = Math.PI/2;
-const DEGREES_270 = 3*Math.PI/2;
 
 class Player extends GameObject {
 	constructor(velocity, position, color) {
@@ -113,10 +112,10 @@ class Player extends GameObject {
 			return Math.atan2(direction.y, direction.x);
 		}
 		else if (direction.y > 0) {
-			return DEGREES_90;
+			return Globals.DEGREES_90;
 		}
 		else {
-			return DEGREES_270;
+			return Globals.DEGREES_270;
 		}
 	}
 	

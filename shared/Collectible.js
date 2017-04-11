@@ -3,13 +3,12 @@
 var GameObject = require('./GameObject');
 var Rectangle = require('../lib/Rectangle');
 var Vector2D = require('../lib/Vector2D');
-
-var DEGREES_360 = 2*Math.PI;
+var Globals = require('../lib/Globals');
 
 class Collectible extends GameObject {
 	constructor(position, health = 100, damage = 10, speed = 10) {
 		super(new Vector2D(0, 0), position, 20, "orange");
-		this.orientation = Math.random() * DEGREES_360;
+		this.orientation = Math.random() * Globals.DEGREES_360;
 		this.movementAngle = this.orientation;
 		this.movementSpread = Math.PI/16;
 		this.rotationSpeed = 1;
@@ -21,11 +20,11 @@ class Collectible extends GameObject {
 	
 	update(deltaTime) {
 		this.movementAngle = this.movementAngle + (Math.random() * this.movementSpread - this.movementSpread/2);
-		if (this.movementAngle > DEGREES_360) {
-			this.movementAngle -= DEGREES_360;
+		if (this.movementAngle > Globals.DEGREES_360) {
+			this.movementAngle -= Globals.DEGREES_360;
 		}
 		else if (this.movementAngle < 0) {
-			this.movementAngle += DEGREES_360
+			this.movementAngle += Globals.DEGREES_360
 		}
 		this.velocity.set(Math.cos(this.movementAngle), Math.sin(this.movementAngle)).setLength(this.speed);
 		let adjustedVelocity = new Vector2D().copy(this.velocity).mul(deltaTime);

@@ -95,13 +95,20 @@ class Client {
 
 module.exports = Client;
 
-},{"../lib/MouseState":3,"../lib/THREEx.KeyboardState":5,"../lib/Vector2D":6,"../shared/GameState":11}],2:[function(require,module,exports){
+},{"../lib/MouseState":4,"../lib/THREEx.KeyboardState":6,"../lib/Vector2D":7,"../shared/GameState":12}],2:[function(require,module,exports){
 'use strict';
 
 var Client = require('./Client');
 new Client().run();
 
 },{"./Client":1}],3:[function(require,module,exports){
+module.exports = {
+    DEGREES_90: Math.PI/2,
+    DEGREES_270: 3*Math.PI/2,
+    DEGREES_360: 2*Math.PI
+};
+
+},{}],4:[function(require,module,exports){
 /**
  * Author: Kiran Sivakumar
 */
@@ -164,7 +171,7 @@ MouseState.buttonCodes = {
 
 module.exports = MouseState;
 
-},{}],4:[function(require,module,exports){
+},{}],5:[function(require,module,exports){
 /**
  * Author: Kiran Sivakumar
 */
@@ -196,7 +203,7 @@ class Rectangle {
 
 module.exports = Rectangle;
 
-},{}],5:[function(require,module,exports){
+},{}],6:[function(require,module,exports){
 /** @namespace */
 var THREEx	= THREEx 		|| {};
 
@@ -281,7 +288,7 @@ THREEx.KeyboardState.prototype.pressed	= function(keyDesc)
 
 module.exports = THREEx.KeyboardState;
 
-},{}],6:[function(require,module,exports){
+},{}],7:[function(require,module,exports){
 /**
  * Author: Kiran Sivakumar
 */
@@ -353,7 +360,7 @@ class Vector2D {
 
 module.exports = Vector2D;
 
-},{}],7:[function(require,module,exports){
+},{}],8:[function(require,module,exports){
 function SpatialHash(range, bucketSize) {
     this.bucketSize = bucketSize || 100;
     this.range = range;
@@ -508,14 +515,13 @@ function getBounds(a) {
     };
 }
 
-},{}],8:[function(require,module,exports){
+},{}],9:[function(require,module,exports){
 'use strict';
 
 var GameObject = require('./GameObject');
 var Rectangle = require('../lib/Rectangle');
 var Vector2D = require('../lib/Vector2D');
-
-const DEGREES_360 = 2*Math.PI;
+var Globals = require('../lib/Globals');
 
 class Bullet extends GameObject {
 	constructor(velocity, position, radius = 7, damage = 40, health = 1, color = "black", outlineColor = 'rgba(80,80,80,1)') {
@@ -535,7 +541,7 @@ class Bullet extends GameObject {
 	draw(ctx) {
 		ctx.setTransform(1, 0, 0, 1, 0, 0);
 		ctx.beginPath();
-		ctx.arc(this.position.x, this.position.y, this.radius, 0, DEGREES_360);
+		ctx.arc(this.position.x, this.position.y, this.radius, 0, Globals.DEGREES_360);
 		ctx.fillStyle = this.color;
 		ctx.fill();
 		ctx.strokeStyle = this.outlineColor;
@@ -546,19 +552,18 @@ class Bullet extends GameObject {
 
 module.exports = Bullet;
 
-},{"../lib/Rectangle":4,"../lib/Vector2D":6,"./GameObject":10}],9:[function(require,module,exports){
+},{"../lib/Globals":3,"../lib/Rectangle":5,"../lib/Vector2D":7,"./GameObject":11}],10:[function(require,module,exports){
 'use strict';
 
 var GameObject = require('./GameObject');
 var Rectangle = require('../lib/Rectangle');
 var Vector2D = require('../lib/Vector2D');
-
-var DEGREES_360 = 2*Math.PI;
+var Globals = require('../lib/Globals');
 
 class Collectible extends GameObject {
 	constructor(position, health = 100, damage = 10, speed = 10) {
 		super(new Vector2D(0, 0), position, 20, "orange");
-		this.orientation = Math.random() * DEGREES_360;
+		this.orientation = Math.random() * Globals.DEGREES_360;
 		this.movementAngle = this.orientation;
 		this.movementSpread = Math.PI/16;
 		this.rotationSpeed = 1;
@@ -570,11 +575,11 @@ class Collectible extends GameObject {
 	
 	update(deltaTime) {
 		this.movementAngle = this.movementAngle + (Math.random() * this.movementSpread - this.movementSpread/2);
-		if (this.movementAngle > DEGREES_360) {
-			this.movementAngle -= DEGREES_360;
+		if (this.movementAngle > Globals.DEGREES_360) {
+			this.movementAngle -= Globals.DEGREES_360;
 		}
 		else if (this.movementAngle < 0) {
-			this.movementAngle += DEGREES_360
+			this.movementAngle += Globals.DEGREES_360
 		}
 		this.velocity.set(Math.cos(this.movementAngle), Math.sin(this.movementAngle)).setLength(this.speed);
 		let adjustedVelocity = new Vector2D().copy(this.velocity).mul(deltaTime);
@@ -598,7 +603,7 @@ class Collectible extends GameObject {
 
 module.exports = Collectible;
 
-},{"../lib/Rectangle":4,"../lib/Vector2D":6,"./GameObject":10}],10:[function(require,module,exports){
+},{"../lib/Globals":3,"../lib/Rectangle":5,"../lib/Vector2D":7,"./GameObject":11}],11:[function(require,module,exports){
 'use strict';
 
 var Rectangle = require('../lib/Rectangle');
@@ -657,7 +662,7 @@ class GameObject {
 
 module.exports = GameObject;
 
-},{"../lib/Rectangle":4}],11:[function(require,module,exports){
+},{"../lib/Rectangle":5}],12:[function(require,module,exports){
 'use strict';
 
 var Player = require('./Player');
@@ -795,7 +800,6 @@ class GameState {
 			else {
 				gameObjects.splice(i, 1);
 				this.spatialHash.remove(gameObject);
-				console.log(gameObject.constructor.name + ' ' + gameObjects.length);
 				i--;
 			}
 		}
@@ -893,7 +897,7 @@ class GameState {
 
 module.exports = GameState;
 
-},{"../lib/Vector2D":6,"./Collectible":9,"./Player":13,"spatialhash-2d":7}],12:[function(require,module,exports){
+},{"../lib/Vector2D":7,"./Collectible":10,"./Player":14,"spatialhash-2d":8}],13:[function(require,module,exports){
 'use strict';
 
 var GameObject = require('./GameObject');
@@ -927,7 +931,7 @@ class HealthBar extends GameObject {
 
 module.exports = HealthBar;
 
-},{"../lib/Rectangle":4,"../lib/Vector2D":6,"./GameObject":10}],13:[function(require,module,exports){
+},{"../lib/Rectangle":5,"../lib/Vector2D":7,"./GameObject":11}],14:[function(require,module,exports){
 'use strict';
 
 var GameObject = require('./GameObject');
@@ -935,10 +939,9 @@ var WeaponFactory = require('./Weapon').WeaponFactory;
 var HealthBar = require('./HealthBar');
 var Rectangle = require('../lib/Rectangle');
 var Vector2D = require('../lib/Vector2D');
+var Globals = require('../lib/Globals');
 
 const DIAG_ACCEL_FACTOR = Math.cos(Math.PI/4);
-const DEGREES_90 = Math.PI/2;
-const DEGREES_270 = 3*Math.PI/2;
 
 class Player extends GameObject {
 	constructor(velocity, position, color) {
@@ -1043,10 +1046,10 @@ class Player extends GameObject {
 			return Math.atan2(direction.y, direction.x);
 		}
 		else if (direction.y > 0) {
-			return DEGREES_90;
+			return Globals.DEGREES_90;
 		}
 		else {
-			return DEGREES_270;
+			return Globals.DEGREES_270;
 		}
 	}
 	
@@ -1057,7 +1060,7 @@ class Player extends GameObject {
 
 module.exports = Player;
 
-},{"../lib/Rectangle":4,"../lib/Vector2D":6,"./GameObject":10,"./HealthBar":12,"./Weapon":14}],14:[function(require,module,exports){
+},{"../lib/Globals":3,"../lib/Rectangle":5,"../lib/Vector2D":7,"./GameObject":11,"./HealthBar":13,"./Weapon":15}],15:[function(require,module,exports){
 'use strict';
 
 var GameObject = require('./GameObject');
@@ -1154,4 +1157,4 @@ var WeaponFactory = {
 
 module.exports = { WeaponFactory: WeaponFactory };
 
-},{"../lib/Vector2D":6,"./Bullet":8,"./GameObject":10}]},{},[2]);
+},{"../lib/Vector2D":7,"./Bullet":9,"./GameObject":11}]},{},[2]);
