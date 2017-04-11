@@ -1,7 +1,3 @@
-- Globals
-
-- Press space for a dash (reduces health)
-
 - Client/Server interaction
 
 - Add comments
@@ -38,16 +34,6 @@ Bugs:
 
 -----------------------------------------------------------------------
 
-Additional node packages:
-- Browserify
-
------------------------------------------------------------------------
-Setup:
-$ browserify index.js -o bundle.js
-$ node Server.js
-
------------------------------------------------------------------------
-
 Performance:
 100 update loops
 100 collectibles
@@ -64,7 +50,12 @@ spatial hash:
 - performance hit due to having to update hash objects
 	- amplifies when moving cursor around for some reason
 
------------------------------------------------------------------------
+----------------------------------------------------------------------
+
+Ideas:
+- Press space for a dash (reduces health)
+
+----------------------------------------------------------------------
 
 - d3-quadtree:
 var d3 = require("d3-quadtree");
