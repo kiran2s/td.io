@@ -4,18 +4,19 @@ var GameState = require('../shared/GameState');
 var KeyboardState = require('../lib/THREEx.KeyboardState');
 var MouseState = require('../lib/MouseState');
 var Vector2D = require('../lib/Vector2D');
+var Globals = require('../lib/Globals');
 
 class Client {
 	constructor() {		
 		this.socket = io();
 		
-		this.canvas = document.getElementById('canvas');
+		this.canvas = Globals.canvas;
 		this.canvas.width = window.innerWidth;
 		this.canvas.height = window.innerHeight;
 		
 		this.ctx = this.canvas.getContext('2d');
 
-		this.gamestate = new GameState(this.canvas.width, this.canvas.height);
+		this.gamestate = new GameState(4000, 4000);
 		
 		this.keyboard = new KeyboardState();
 		this.mouse = new MouseState();
@@ -31,12 +32,22 @@ class Client {
 	gameStateUpdate() {
 		let keys = { numDirKeysPressed: 0 };
 		let dirKeys = "WASD";
-		for (let i = 0; i < 4; i++) {
+		for (let i = 0; i < dirKeys.length; i++) {
 			let currKey = dirKeys[i];
 			if (this.keyboard.pressed(currKey)) {
 				keys[currKey] = true;
 				keys.numDirKeysPressed++;
 			}
+		}
+		let numKeys = "123";
+		for (let i = 0; i < numKeys.length; i++) {
+			let currKey = numKeys[i];
+			if (this.keyboard.pressed(currKey)) {
+				keys[currKey] = true;
+			}
+		}
+		if (this.keyboard.pressed('1')) {
+			keys['F'] = true;
 		}
 		if (this.keyboard.pressed('space')) {
 			keys['space'] = true;
@@ -88,8 +99,6 @@ class Client {
 	onWindowResize(event) {
 		this.canvas.width = window.innerWidth;
 		this.canvas.height = window.innerHeight;
-		this.gamestate.worldWidth = this.canvas.width;
-		this.gamestate.worldHeight = this.canvas.height;
 	}
 }
 

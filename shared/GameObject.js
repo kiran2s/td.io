@@ -52,6 +52,14 @@ class GameObject {
 			this.health -= dmgAmt;
 		}
 	}
+
+	isExpired() {
+		if (this.hasOwnProperty("expiryTime") && Date.now() >= this.expiryTime) {
+			return true;
+		}
+		
+		return false;
+	}
 }
 
 module.exports = GameObject;

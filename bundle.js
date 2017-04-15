@@ -5,18 +5,19 @@ var GameState = require('../shared/GameState');
 var KeyboardState = require('../lib/THREEx.KeyboardState');
 var MouseState = require('../lib/MouseState');
 var Vector2D = require('../lib/Vector2D');
+var Globals = require('../lib/Globals');
 
 class Client {
 	constructor() {		
 		this.socket = io();
 		
-		this.canvas = document.getElementById('canvas');
+		this.canvas = Globals.canvas;
 		this.canvas.width = window.innerWidth;
 		this.canvas.height = window.innerHeight;
 		
 		this.ctx = this.canvas.getContext('2d');
 
-		this.gamestate = new GameState(this.canvas.width, this.canvas.height);
+		this.gamestate = new GameState(4000, 4000);
 		
 		this.keyboard = new KeyboardState();
 		this.mouse = new MouseState();
@@ -32,12 +33,22 @@ class Client {
 	gameStateUpdate() {
 		let keys = { numDirKeysPressed: 0 };
 		let dirKeys = "WASD";
-		for (let i = 0; i < 4; i++) {
+		for (let i = 0; i < dirKeys.length; i++) {
 			let currKey = dirKeys[i];
 			if (this.keyboard.pressed(currKey)) {
 				keys[currKey] = true;
 				keys.numDirKeysPressed++;
 			}
+		}
+		let numKeys = "123";
+		for (let i = 0; i < numKeys.length; i++) {
+			let currKey = numKeys[i];
+			if (this.keyboard.pressed(currKey)) {
+				keys[currKey] = true;
+			}
+		}
+		if (this.keyboard.pressed('1')) {
+			keys['F'] = true;
 		}
 		if (this.keyboard.pressed('space')) {
 			keys['space'] = true;
@@ -85,17 +96,16 @@ class Client {
 		window.requestAnimationFrame(this.drawUpdate.bind(this));
 	}
 	
+	// TODO: gamestate should not be updated
 	onWindowResize(event) {
 		this.canvas.width = window.innerWidth;
 		this.canvas.height = window.innerHeight;
-		this.gamestate.worldWidth = this.canvas.width;
-		this.gamestate.worldHeight = this.canvas.height;
 	}
 }
 
 module.exports = Client;
 
-},{"../lib/MouseState":4,"../lib/THREEx.KeyboardState":6,"../lib/Vector2D":7,"../shared/GameState":12}],2:[function(require,module,exports){
+},{"../lib/Globals":3,"../lib/MouseState":4,"../lib/THREEx.KeyboardState":6,"../lib/Vector2D":7,"../shared/GameState":12}],2:[function(require,module,exports){
 'use strict';
 
 var Client = require('./Client');
@@ -105,7 +115,13 @@ new Client().run();
 module.exports = {
     DEGREES_90: Math.PI/2,
     DEGREES_270: 3*Math.PI/2,
-    DEGREES_360: 2*Math.PI
+    DEGREES_360: 2*Math.PI,
+    
+    canvas: document.getElementById('canvas'),
+    
+    areObjectsSame: function(o1, o2) {
+        return JSON.stringify(o1) === JSON.stringify(o2);
+    }
 };
 
 },{}],4:[function(require,module,exports){
@@ -320,7 +336,7 @@ class Vector2D {
 	setToUnit() {
 		var len = this.getLength();
 		if (len === 0) {
-			return;
+			return this;
 		}
 		
 		this.mul(1/len);
@@ -524,11 +540,12 @@ var Vector2D = require('../lib/Vector2D');
 var Globals = require('../lib/Globals');
 
 class Bullet extends GameObject {
-	constructor(velocity, position, radius = 7, damage = 40, health = 1, color = "black", outlineColor = 'rgba(80,80,80,1)') {
+	constructor(velocity, position, radius = 7, damage = 40, health = 1, timeToExpire = 3000, color = "black", outlineColor = 'rgba(80,80,80,1)') {
 		super(velocity, position, radius*2, color);
 		this.radius = radius;
 		this.health = health;
 		this.damage = damage;
+		this.expiryTime = Date.now() + timeToExpire;
 		this.outlineColor = outlineColor;
 	}
 	
@@ -539,7 +556,7 @@ class Bullet extends GameObject {
 	}
 	
 	draw(ctx) {
-		ctx.setTransform(1, 0, 0, 1, 0, 0);
+		//ctx.setTransform(1, 0, 0, 1, 0, 0);
 		ctx.beginPath();
 		ctx.arc(this.position.x, this.position.y, this.radius, 0, Globals.DEGREES_360);
 		ctx.fillStyle = this.color;
@@ -562,7 +579,7 @@ var Globals = require('../lib/Globals');
 
 class Collectible extends GameObject {
 	constructor(position, health = 100, damage = 10, speed = 10) {
-		super(new Vector2D(0, 0), position, 20, "orange");
+		super(new Vector2D(0, 0), position, 20, 'rgba(255,192,0,1)');
 		this.orientation = Math.random() * Globals.DEGREES_360;
 		this.movementAngle = this.orientation;
 		this.movementSpread = Math.PI/16;
@@ -589,7 +606,7 @@ class Collectible extends GameObject {
 	}
 	
 	draw(ctx) {
-		ctx.setTransform(1, 0, 0, 1, this.position.x, this.position.y);
+		ctx.transform(1, 0, 0, 1, this.position.x, this.position.y);
 		ctx.rotate(this.orientation);
 		ctx.transform(1, 0, 0, 1, -this.size/2, -this.size/2);
 		ctx.fillStyle = this.color;
@@ -658,6 +675,14 @@ class GameObject {
 			this.health -= dmgAmt;
 		}
 	}
+
+	isExpired() {
+		if (this.hasOwnProperty("expiryTime") && Date.now() >= this.expiryTime) {
+			return true;
+		}
+		
+		return false;
+	}
 }
 
 module.exports = GameObject;
@@ -669,6 +694,8 @@ var Player = require('./Player');
 var Collectible = require('./Collectible');
 var Vector2D = require('../lib/Vector2D');
 var SpatialHash = require('spatialhash-2d');
+var Globals = require('../lib/Globals');
+
 var updateCount = 0;
 var accumTime;
 
@@ -695,6 +722,8 @@ class GameState {
 		}
 
 		this.spatialHash.insert(this.player);
+
+		this.grid = document.getElementById("grid");
 		
 		this.prevTime = Date.now();
 	}
@@ -727,13 +756,22 @@ class GameState {
 	}
 	
 	draw(ctx) {
+		let cameraTranslate = {
+			x: Globals.canvas.width/2 - this.player.position.x,
+			y: Globals.canvas.height/2 - this.player.position.y
+		};
+
+		ctx.setTransform(1, 0, 0, 1, cameraTranslate.x, cameraTranslate.y);
+		this.drawBackground(ctx);
 		if (this.player.health > 0) {	
 			this.player.draw(ctx);
 		}
 		for (let i = 0; i < this.bullets.length; i++) {
+			ctx.setTransform(1, 0, 0, 1, cameraTranslate.x, cameraTranslate.y);
 			this.bullets[i].draw(ctx);
 		}
 		for (let i = 0; i < this.collectibles.length; i++) {
+			ctx.setTransform(1, 0, 0, 1, cameraTranslate.x, cameraTranslate.y);
 			this.collectibles[i].draw(ctx);
 		}
 	}
@@ -789,7 +827,7 @@ class GameState {
 	updateGameObjects(gameObjects, deltaTime) {
 		for (let i = 0; i < gameObjects.length; i++) {
 			let gameObject = gameObjects[i];
-			if (this.isWithinGameWorld(gameObject.position)) {
+			if (this.isWithinGameWorld(gameObject.position) && !gameObject.isExpired()) {
 				let preUpdateBuckets = this.findBuckets(gameObject);
 				gameObject.update(deltaTime);
 				let postUpdateBuckets = this.findBuckets(gameObject);
@@ -829,25 +867,36 @@ class GameState {
 			let bullet = this.bullets[i];
 			let intersectList = this.spatialHash.query(bullet.range, function(item) { return item.constructor.name === 'Collectible'; });
 			if (intersectList.length > 0) {
-				let j = this.collectibles.findIndex(function(c) { return JSON.stringify(intersectList[0]) === JSON.stringify(c); });
+				let j = this.collectibles.findIndex(function(c) { return Globals.areObjectsSame(intersectList[0], c); });
 				let collectible = this.collectibles[j];
-				this.collectibles.splice(j, 1);
-				this.spatialHash.remove(collectible);
+				collectible.takeDamage(bullet.damage);
+				if (collectible.health <= 0) {
+					this.collectibles.splice(j, 1);
+					this.spatialHash.remove(collectible);
+				}
+				else {
+					this.bullets.splice(i, 1);
+					this.spatialHash.remove(bullet);
+					i--;
+				}
 			}
 		}
 		if (this.player.health > 0) {
 			let intersectList = this.spatialHash.query(this.player.range, function(item) { return item.constructor.name === 'Collectible'; });
 			if (intersectList.length > 0) {
-				let j = this.collectibles.findIndex(function(c) { return JSON.stringify(intersectList[0]) === JSON.stringify(c); });
+				let j = this.collectibles.findIndex(function(c) { return Globals.areObjectsSame(intersectList[0], c); });
 				let collectible = this.collectibles[j];
-				this.collectibles.splice(j, 1);
-				this.spatialHash.remove(collectible);
+
+				collectible.takeDamage(this.player.damage);
+				if (collectible.health <= 0) {
+					this.collectibles.splice(j, 1);
+					this.spatialHash.remove(collectible);
+				}
 
 				this.player.takeDamage(collectible.damage);
 				//console.log(this.player.health);
 				if (this.player.health <= 0) {
 					this.spatialHash.remove(this.player);
-					
 				}
 			}
 		}
@@ -865,6 +914,12 @@ class GameState {
 			}
 		}
 		/**/
+	}
+
+	drawBackground(ctx) {
+		ctx.rect(0, 0, this.worldWidth, this.worldHeight);
+		ctx.fillStyle = ctx.createPattern(this.grid, "repeat");
+		ctx.fill();
 	}
 	
 	isWithinGameWorld(position) {
@@ -897,7 +952,7 @@ class GameState {
 
 module.exports = GameState;
 
-},{"../lib/Vector2D":7,"./Collectible":10,"./Player":14,"spatialhash-2d":8}],13:[function(require,module,exports){
+},{"../lib/Globals":3,"../lib/Vector2D":7,"./Collectible":10,"./Player":14,"spatialhash-2d":8}],13:[function(require,module,exports){
 'use strict';
 
 var GameObject = require('./GameObject');
@@ -955,7 +1010,8 @@ class Player extends GameObject {
 		this.radius = this.size/2;
 		this.orientation = 0;
 		this.health = 100;
-		this.weapon = WeaponFactory.makePlebPistol(new Vector2D(this.radius, -this.radius/2));
+		this.damage = 100;
+		this.weapon = WeaponFactory.makePlebPistol(this.radius);
 		this.healthBar = new HealthBar(new Vector2D(0, this.radius + 12), this.radius * 2.5);
 	}
 	
@@ -1009,8 +1065,25 @@ class Player extends GameObject {
 		let adjustedPlayerVelocity = new Vector2D().copy(this.velocity).mul(deltaTime);
 		this.position.add(adjustedPlayerVelocity);
 		
-		let direction = new Vector2D().copy(mousePosition).sub(this.position);
+		//let direction = new Vector2D().copy(mousePosition).sub(this.position);
+		let direction = new Vector2D().copy(mousePosition).sub(new Vector2D(Globals.canvas.width/2, Globals.canvas.height/2));
 		this.orientation = this.convertToOrientation(direction);
+
+		if ('1' in keysPressed) {
+			if (this.weapon.name !== "Pleb Pistol") {
+				this.weapon = WeaponFactory.makePlebPistol(this.radius);
+			}
+		}
+		else if ('2' in keysPressed) {
+			if (this.weapon.name !== "Flame Thrower") {
+				this.weapon = WeaponFactory.makeFlameThrower(this.radius);
+			}
+		}
+		else if ('3' in keysPressed) {
+			if (this.weapon.name !== "Volcano") {
+				this.weapon = WeaponFactory.makeVolcano(this.radius);
+			}
+		}
 
 		this.healthBar.update(this.health);
 
@@ -1020,6 +1093,32 @@ class Player extends GameObject {
 	}
 	
 	draw(ctx) {
+		let cameraTranslate = {
+			x: Globals.canvas.width/2,
+			y: Globals.canvas.height/2
+		};
+
+		ctx.setTransform(1, 0, 0, 1, cameraTranslate.x, cameraTranslate.y);
+		ctx.beginPath();
+		ctx.arc(0, 0, this.radius, 0, 2*Math.PI);
+		ctx.fillStyle = this.color;
+		ctx.fill();
+
+		ctx.setTransform(1, 0, 0, 1, cameraTranslate.x, cameraTranslate.y);
+		ctx.rotate(this.orientation);
+		this.weapon.draw(ctx);
+
+		ctx.setTransform(1, 0, 0, 1, cameraTranslate.x, cameraTranslate.y);
+		this.healthBar.draw(ctx);
+		
+		ctx.setTransform(1, 0, 0, 1, cameraTranslate.x, cameraTranslate.y);
+		ctx.beginPath();
+		ctx.arc(0, 0, this.radius, 0, 2*Math.PI);
+		ctx.strokeStyle = this.outlineColor;
+		ctx.lineWidth = 3;
+		ctx.stroke();
+
+		/* Without camera
 		ctx.setTransform(1, 0, 0, 1, 0, 0);
 		ctx.beginPath();
 		ctx.arc(this.position.x, this.position.y, this.radius, 0, 2*Math.PI);
@@ -1039,6 +1138,7 @@ class Player extends GameObject {
 		ctx.strokeStyle = this.outlineColor;
 		ctx.lineWidth = 3;
 		ctx.stroke();
+		*/
 	}
 	
 	convertToOrientation(direction) {
@@ -1054,7 +1154,7 @@ class Player extends GameObject {
 	}
 	
 	fireWeapon() {		
-		return this.weapon.fire(this.orientation, this.position, this.radius);
+		return this.weapon.fire(this.orientation, this.position);
 	}
 }
 
@@ -1069,7 +1169,8 @@ var Vector2D = require('../lib/Vector2D');
 
 class Weapon extends GameObject {
 	constructor(
-		position, 
+		name, 
+		distanceFromPlayer, 
 		size, 
 		color, 
 		bulletDamage, 
@@ -1078,10 +1179,13 @@ class Weapon extends GameObject {
 		fireRate, 
 		bulletSpread, 
 		bulletRadius, 
-		bulletColor,
+		bulletTimeToExpire, 
+		bulletColor, 
 		bulletOutlineColor
 	) {
-		super(new Vector2D(0, 0), position, size, color);
+		super(new Vector2D(0, 0), new Vector2D(distanceFromPlayer, -size/2), size, color);
+		this.name = name;
+		this.distanceFromPlayer = distanceFromPlayer;
 		this.outlineColor = 'rgba(80,80,80,1)';
 		this.bulletDamage = bulletDamage;
 		this.bulletHealth = bulletHealth;
@@ -1089,18 +1193,19 @@ class Weapon extends GameObject {
 		this.msPerBullet = 1000/fireRate;
 		this.bulletSpread = bulletSpread * Math.PI/180;
 		this.bulletRadius = bulletRadius;
+		this.bulletTimeToExpire = bulletTimeToExpire;
 		this.bulletColor = bulletColor;
 		this.bulletOutlineColor = bulletOutlineColor;
 		
 		this.prevFireTime = 0;
 	}
 	
-	fire(playerOrientation, playerPosition, distanceFromPlayer) {
+	fire(playerOrientation, playerPosition) {
 		let currTime = Date.now();
 		if (currTime - this.prevFireTime > this.msPerBullet) {
 			this.prevFireTime = currTime;
 			let bulletDirection = this.generateBulletDirection(playerOrientation);
-			let bulletVelocity = new Vector2D().copy(bulletDirection).setLength(distanceFromPlayer + this.size);
+			let bulletVelocity = new Vector2D().copy(bulletDirection).setLength(this.distanceFromPlayer + this.size);
 			let bulletPosition = new Vector2D().copy(playerPosition).add(bulletVelocity);
 			bulletVelocity.setLength(this.bulletSpeed);
 			return new Bullet(
@@ -1109,6 +1214,7 @@ class Weapon extends GameObject {
 				this.bulletRadius,
 				this.bulletDamage,
 				this.bulletHealth,
+				this.bulletTimeToExpire,
 				this.bulletColor,
 				this.bulletOutlineColor
 			);
@@ -1144,17 +1250,24 @@ class Weapon extends GameObject {
 
 // dark grey: 'rgba(80,80,80,1)'
 var WeaponFactory = {
-	makePlebPistol: function(position) {
-		return new Weapon(position, 20, "red", 40, 1, 350, 3, 12, 8, 'rgba(255,128,0,1)', 'rgba(80,80,80,1)');
+						//name				dist		  		size	color					damage	health	speed	rate	spread	rad	exp		bullet color			bullet outline color
+	makePlebPistol: function(distanceFromPlayer) {
+		return new Weapon("Pleb Pistol", 	distanceFromPlayer, 19, 	'rgba(255,0,128,1)', 	40, 	1, 		350, 	3, 		12, 	8, 	3000, 	'rgba(255,128,0,1)', 	'rgba(80,80,80,1)');
 	},
-	makeLavaPisser: function(position) {
-		return new Weapon(position, 20, "red", 5, 1, 225, 1000, 6, 10, 'rgba(255,85,0,1)', 'rgba(255,0,0,1)');
+	makeFlameThrower: function(distanceFromPlayer) {
+		return new Weapon("Flame Thrower", 	distanceFromPlayer, 20, 	'rgba(255,140,0,1)', 	3, 		2, 		600, 	1000,	7, 		10, 440, 	'rgba(255,140,0,1)', 	'rgba(255,90,0,1)');
 	},
-	makeVolcano: function(position) {
-		return new Weapon(position, 20, "red", 5, 1, 150, 1000, 60, 10, 'rgba(255,85,0,1)', 'rgba(255,0,0,1)');
+	makeVolcano: function(distanceFromPlayer) {
+		return new Weapon("Volcano", 		distanceFromPlayer, 21, 	'rgba(255,0,0,1)', 		4, 		1, 		150, 	1000, 	60, 	10, 2000, 	'rgba(255,85,0,1)', 	'rgba(255,0,0,1)');
 	}
 };
 
 module.exports = { WeaponFactory: WeaponFactory };
+
+/*
+'rgba(255,0,80,1)' rasberry
+'rgba(255,85,0,1)' orange
+'rgba(130,100,80,1)' mountain
+*/
 
 },{"../lib/Vector2D":7,"./Bullet":9,"./GameObject":11}]},{},[2]);

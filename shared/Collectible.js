@@ -7,7 +7,7 @@ var Globals = require('../lib/Globals');
 
 class Collectible extends GameObject {
 	constructor(position, health = 100, damage = 10, speed = 10) {
-		super(new Vector2D(0, 0), position, 20, "orange");
+		super(new Vector2D(0, 0), position, 20, 'rgba(255,192,0,1)');
 		this.orientation = Math.random() * Globals.DEGREES_360;
 		this.movementAngle = this.orientation;
 		this.movementSpread = Math.PI/16;
@@ -34,7 +34,7 @@ class Collectible extends GameObject {
 	}
 	
 	draw(ctx) {
-		ctx.setTransform(1, 0, 0, 1, this.position.x, this.position.y);
+		ctx.transform(1, 0, 0, 1, this.position.x, this.position.y);
 		ctx.rotate(this.orientation);
 		ctx.transform(1, 0, 0, 1, -this.size/2, -this.size/2);
 		ctx.fillStyle = this.color;

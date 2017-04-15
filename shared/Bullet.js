@@ -6,11 +6,12 @@ var Vector2D = require('../lib/Vector2D');
 var Globals = require('../lib/Globals');
 
 class Bullet extends GameObject {
-	constructor(velocity, position, radius = 7, damage = 40, health = 1, color = "black", outlineColor = 'rgba(80,80,80,1)') {
+	constructor(velocity, position, radius = 7, damage = 40, health = 1, timeToExpire = 3000, color = "black", outlineColor = 'rgba(80,80,80,1)') {
 		super(velocity, position, radius*2, color);
 		this.radius = radius;
 		this.health = health;
 		this.damage = damage;
+		this.expiryTime = Date.now() + timeToExpire;
 		this.outlineColor = outlineColor;
 	}
 	
@@ -21,7 +22,7 @@ class Bullet extends GameObject {
 	}
 	
 	draw(ctx) {
-		ctx.setTransform(1, 0, 0, 1, 0, 0);
+		//ctx.setTransform(1, 0, 0, 1, 0, 0);
 		ctx.beginPath();
 		ctx.arc(this.position.x, this.position.y, this.radius, 0, Globals.DEGREES_360);
 		ctx.fillStyle = this.color;

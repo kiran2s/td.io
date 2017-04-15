@@ -21,7 +21,8 @@ class Player extends GameObject {
 		this.radius = this.size/2;
 		this.orientation = 0;
 		this.health = 100;
-		this.weapon = WeaponFactory.makePlebPistol(new Vector2D(this.radius, -this.radius/2));
+		this.damage = 100;
+		this.weapon = WeaponFactory.makePlebPistol(this.radius);
 		this.healthBar = new HealthBar(new Vector2D(0, this.radius + 12), this.radius * 2.5);
 	}
 	
@@ -75,8 +76,25 @@ class Player extends GameObject {
 		let adjustedPlayerVelocity = new Vector2D().copy(this.velocity).mul(deltaTime);
 		this.position.add(adjustedPlayerVelocity);
 		
-		let direction = new Vector2D().copy(mousePosition).sub(this.position);
+		//let direction = new Vector2D().copy(mousePosition).sub(this.position);
+		let direction = new Vector2D().copy(mousePosition).sub(new Vector2D(Globals.canvas.width/2, Globals.canvas.height/2));
 		this.orientation = this.convertToOrientation(direction);
+
+		if ('1' in keysPressed) {
+			if (this.weapon.name !== "Pleb Pistol") {
+				this.weapon = WeaponFactory.makePlebPistol(this.radius);
+			}
+		}
+		else if ('2' in keysPressed) {
+			if (this.weapon.name !== "Flame Thrower") {
+				this.weapon = WeaponFactory.makeFlameThrower(this.radius);
+			}
+		}
+		else if ('3' in keysPressed) {
+			if (this.weapon.name !== "Volcano") {
+				this.weapon = WeaponFactory.makeVolcano(this.radius);
+			}
+		}
 
 		this.healthBar.update(this.health);
 
@@ -86,6 +104,32 @@ class Player extends GameObject {
 	}
 	
 	draw(ctx) {
+		let cameraTranslate = {
+			x: Globals.canvas.width/2,
+			y: Globals.canvas.height/2
+		};
+
+		ctx.setTransform(1, 0, 0, 1, cameraTranslate.x, cameraTranslate.y);
+		ctx.beginPath();
+		ctx.arc(0, 0, this.radius, 0, 2*Math.PI);
+		ctx.fillStyle = this.color;
+		ctx.fill();
+
+		ctx.setTransform(1, 0, 0, 1, cameraTranslate.x, cameraTranslate.y);
+		ctx.rotate(this.orientation);
+		this.weapon.draw(ctx);
+
+		ctx.setTransform(1, 0, 0, 1, cameraTranslate.x, cameraTranslate.y);
+		this.healthBar.draw(ctx);
+		
+		ctx.setTransform(1, 0, 0, 1, cameraTranslate.x, cameraTranslate.y);
+		ctx.beginPath();
+		ctx.arc(0, 0, this.radius, 0, 2*Math.PI);
+		ctx.strokeStyle = this.outlineColor;
+		ctx.lineWidth = 3;
+		ctx.stroke();
+
+		/* Without camera
 		ctx.setTransform(1, 0, 0, 1, 0, 0);
 		ctx.beginPath();
 		ctx.arc(this.position.x, this.position.y, this.radius, 0, 2*Math.PI);
@@ -105,6 +149,7 @@ class Player extends GameObject {
 		ctx.strokeStyle = this.outlineColor;
 		ctx.lineWidth = 3;
 		ctx.stroke();
+		*/
 	}
 	
 	convertToOrientation(direction) {
@@ -120,7 +165,7 @@ class Player extends GameObject {
 	}
 	
 	fireWeapon() {		
-		return this.weapon.fire(this.orientation, this.position, this.radius);
+		return this.weapon.fire(this.orientation, this.position);
 	}
 }
 

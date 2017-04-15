@@ -4,6 +4,8 @@ var Player = require('./Player');
 var Collectible = require('./Collectible');
 var Vector2D = require('../lib/Vector2D');
 var SpatialHash = require('spatialhash-2d');
+var Globals = require('../lib/Globals');
+
 var updateCount = 0;
 var accumTime;
 
@@ -30,6 +32,8 @@ class GameState {
 		}
 
 		this.spatialHash.insert(this.player);
+
+		this.grid = document.getElementById("grid");
 		
 		this.prevTime = Date.now();
 	}
@@ -62,13 +66,22 @@ class GameState {
 	}
 	
 	draw(ctx) {
+		let cameraTranslate = {
+			x: Globals.canvas.width/2 - this.player.position.x,
+			y: Globals.canvas.height/2 - this.player.position.y
+		};
+
+		ctx.setTransform(1, 0, 0, 1, cameraTranslate.x, cameraTranslate.y);
+		this.drawBackground(ctx);
 		if (this.player.health > 0) {	
 			this.player.draw(ctx);
 		}
 		for (let i = 0; i < this.bullets.length; i++) {
+			ctx.setTransform(1, 0, 0, 1, cameraTranslate.x, cameraTranslate.y);
 			this.bullets[i].draw(ctx);
 		}
 		for (let i = 0; i < this.collectibles.length; i++) {
+			ctx.setTransform(1, 0, 0, 1, cameraTranslate.x, cameraTranslate.y);
 			this.collectibles[i].draw(ctx);
 		}
 	}
@@ -124,7 +137,7 @@ class GameState {
 	updateGameObjects(gameObjects, deltaTime) {
 		for (let i = 0; i < gameObjects.length; i++) {
 			let gameObject = gameObjects[i];
-			if (this.isWithinGameWorld(gameObject.position)) {
+			if (this.isWithinGameWorld(gameObject.position) && !gameObject.isExpired()) {
 				let preUpdateBuckets = this.findBuckets(gameObject);
 				gameObject.update(deltaTime);
 				let postUpdateBuckets = this.findBuckets(gameObject);
@@ -164,25 +177,36 @@ class GameState {
 			let bullet = this.bullets[i];
 			let intersectList = this.spatialHash.query(bullet.range, function(item) { return item.constructor.name === 'Collectible'; });
 			if (intersectList.length > 0) {
-				let j = this.collectibles.findIndex(function(c) { return JSON.stringify(intersectList[0]) === JSON.stringify(c); });
+				let j = this.collectibles.findIndex(function(c) { return Globals.areObjectsSame(intersectList[0], c); });
 				let collectible = this.collectibles[j];
-				this.collectibles.splice(j, 1);
-				this.spatialHash.remove(collectible);
+				collectible.takeDamage(bullet.damage);
+				if (collectible.health <= 0) {
+					this.collectibles.splice(j, 1);
+					this.spatialHash.remove(collectible);
+				}
+				else {
+					this.bullets.splice(i, 1);
+					this.spatialHash.remove(bullet);
+					i--;
+				}
 			}
 		}
 		if (this.player.health > 0) {
 			let intersectList = this.spatialHash.query(this.player.range, function(item) { return item.constructor.name === 'Collectible'; });
 			if (intersectList.length > 0) {
-				let j = this.collectibles.findIndex(function(c) { return JSON.stringify(intersectList[0]) === JSON.stringify(c); });
+				let j = this.collectibles.findIndex(function(c) { return Globals.areObjectsSame(intersectList[0], c); });
 				let collectible = this.collectibles[j];
-				this.collectibles.splice(j, 1);
-				this.spatialHash.remove(collectible);
+
+				collectible.takeDamage(this.player.damage);
+				if (collectible.health <= 0) {
+					this.collectibles.splice(j, 1);
+					this.spatialHash.remove(collectible);
+				}
 
 				this.player.takeDamage(collectible.damage);
 				//console.log(this.player.health);
 				if (this.player.health <= 0) {
 					this.spatialHash.remove(this.player);
-					
 				}
 			}
 		}
@@ -200,6 +224,12 @@ class GameState {
 			}
 		}
 		/**/
+	}
+
+	drawBackground(ctx) {
+		ctx.rect(0, 0, this.worldWidth, this.worldHeight);
+		ctx.fillStyle = ctx.createPattern(this.grid, "repeat");
+		ctx.fill();
 	}
 	
 	isWithinGameWorld(position) {
