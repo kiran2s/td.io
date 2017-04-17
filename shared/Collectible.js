@@ -1,6 +1,7 @@
 'use strict';
 
 var GameObject = require('./GameObject');
+var HealthBar = require('./HealthBar');
 var Rectangle = require('../lib/Rectangle');
 var Vector2D = require('../lib/Vector2D');
 var Globals = require('../lib/Globals');
@@ -13,9 +14,12 @@ class Collectible extends GameObject {
 		this.movementSpread = Math.PI/16;
 		this.rotationSpeed = 1;
 		this.health = health;
+		this.isDamaged = false;
 		this.damage = damage;
 		this.speed = speed;
 		this.outlineColor = 'rgba(80,80,80,1)';
+
+		this.healthBar = new HealthBar(new Vector2D(0, this.size + 10), this.size * 1.5);
 	}
 	
 	update(deltaTime) {
@@ -30,10 +34,14 @@ class Collectible extends GameObject {
 		let adjustedVelocity = new Vector2D().copy(this.velocity).mul(deltaTime);
 		this.position.add(adjustedVelocity);
 		this.orientation += this.rotationSpeed * deltaTime;
+
+		this.healthBar.update(this.health);
+
 		this.updateRange();
 	}
 	
-	draw(ctx) {
+	draw(ctx, transformToCameraCoords) {
+		transformToCameraCoords();
 		ctx.transform(1, 0, 0, 1, this.position.x, this.position.y);
 		ctx.rotate(this.orientation);
 		ctx.transform(1, 0, 0, 1, -this.size/2, -this.size/2);
@@ -43,6 +51,17 @@ class Collectible extends GameObject {
 		ctx.strokeStyle = this.outlineColor;
 		ctx.lineWidth = 3;
 		ctx.strokeRect(0, 0, this.size, this.size);
+
+		if (this.isDamaged) {
+			transformToCameraCoords();
+			ctx.transform(1, 0, 0, 1, this.position.x, this.position.y);
+			this.healthBar.draw(ctx);
+		}
+	}
+
+	takeDamage(dmgAmt) {
+		this.isDamaged = true;
+		super.takeDamage(dmgAmt);
 	}
 }
 

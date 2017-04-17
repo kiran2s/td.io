@@ -7,6 +7,17 @@ var MouseState = require('../lib/MouseState');
 var Vector2D = require('../lib/Vector2D');
 var Globals = require('../lib/Globals');
 
+var WORLD_WIDTH = 4000;
+var WORLD_HEIGHT = 4000;
+
+var prevTime = Date.now();
+var frameCount = 0;
+var frameRate = 0;
+
+var updateCount = 0;
+var accumTime = 0;
+var timePerUpdate = 0;
+
 class Client {
 	constructor() {		
 		this.socket = io();
@@ -17,7 +28,7 @@ class Client {
 		
 		this.ctx = this.canvas.getContext('2d');
 
-		this.gamestate = new GameState(4000, 4000);
+		this.gamestate = new GameState(WORLD_WIDTH, WORLD_HEIGHT);
 		
 		this.keyboard = new KeyboardState();
 		this.mouse = new MouseState();
@@ -31,6 +42,8 @@ class Client {
 	}
 	
 	gameStateUpdate() {
+		let currTime = Date.now();
+
 		let keys = { numDirKeysPressed: 0 };
 		let dirKeys = "WASD";
 		for (let i = 0; i < dirKeys.length; i++) {
@@ -70,7 +83,7 @@ class Client {
 		}
 		else {
 			if (mouseLeftButtonDown || 'space' in keys) {
-				this.gamestate = new GameState(this.canvas.width, this.canvas.height);
+				this.gamestate = new GameState(WORLD_WIDTH, WORLD_HEIGHT);
 				playState = true;
 				window.requestAnimationFrame(this.drawUpdate.bind(this));
 			}
@@ -78,6 +91,14 @@ class Client {
 
 		if (!playState) {
 			this.gamestate = undefined;
+		}
+
+		accumTime += Date.now() - currTime;
+		updateCount++;
+		if (updateCount >= 100) {
+			timePerUpdate = accumTime / 100.0;
+			updateCount = 0;
+			accumTime = 0;
 		}
 	}
 	
@@ -88,11 +109,32 @@ class Client {
 		if (this.gamestate === undefined) {
 			this.ctx.fillStyle = "red";
 			this.ctx.font = '100px Arial';
-			this.ctx.fillText("YOU DEAD", this.canvas.width/3, this.canvas.height/2);
+			let msg = "YOU DEAD";
+			this.ctx.fillText(msg, this.canvas.width/2 - this.ctx.measureText(msg).width/2, this.canvas.height/2);
 			return;
 		}
 
 		this.gamestate.draw(this.ctx);
+		
+		this.ctx.setTransform(1, 0, 0, 1, 0, 0);
+		this.ctx.fillStyle = "purple";
+		this.ctx.font = '15px Arial';
+		this.ctx.fillText("[1]  Pleb Pistol", 20, this.canvas.height - 70);
+		this.ctx.fillText("[2]  Flame Thrower", 20, this.canvas.height - 50);
+		this.ctx.fillText("[3]  Volcano", 20, this.canvas.height - 30);
+
+		frameCount++;
+		let currTime = Date.now();
+		if (currTime - prevTime >= 1000) {
+			frameRate = frameCount;
+			frameCount = 0;
+			prevTime = currTime;
+		}
+
+		this.ctx.fillStyle = "black";
+		this.ctx.fillText("Frame rate: " + frameRate, 20, 30);
+		this.ctx.fillText("Update time: " + timePerUpdate + "ms", 20, 50);
+
 		window.requestAnimationFrame(this.drawUpdate.bind(this));
 	}
 	
@@ -555,8 +597,8 @@ class Bullet extends GameObject {
 		this.updateRange();
 	}
 	
-	draw(ctx) {
-		//ctx.setTransform(1, 0, 0, 1, 0, 0);
+	draw(ctx, transformToCameraCoords) {
+		transformToCameraCoords();
 		ctx.beginPath();
 		ctx.arc(this.position.x, this.position.y, this.radius, 0, Globals.DEGREES_360);
 		ctx.fillStyle = this.color;
@@ -573,6 +615,7 @@ module.exports = Bullet;
 'use strict';
 
 var GameObject = require('./GameObject');
+var HealthBar = require('./HealthBar');
 var Rectangle = require('../lib/Rectangle');
 var Vector2D = require('../lib/Vector2D');
 var Globals = require('../lib/Globals');
@@ -585,9 +628,12 @@ class Collectible extends GameObject {
 		this.movementSpread = Math.PI/16;
 		this.rotationSpeed = 1;
 		this.health = health;
+		this.isDamaged = false;
 		this.damage = damage;
 		this.speed = speed;
 		this.outlineColor = 'rgba(80,80,80,1)';
+
+		this.healthBar = new HealthBar(new Vector2D(0, this.size + 10), this.size * 1.5);
 	}
 	
 	update(deltaTime) {
@@ -602,10 +648,14 @@ class Collectible extends GameObject {
 		let adjustedVelocity = new Vector2D().copy(this.velocity).mul(deltaTime);
 		this.position.add(adjustedVelocity);
 		this.orientation += this.rotationSpeed * deltaTime;
+
+		this.healthBar.update(this.health);
+
 		this.updateRange();
 	}
 	
-	draw(ctx) {
+	draw(ctx, transformToCameraCoords) {
+		transformToCameraCoords();
 		ctx.transform(1, 0, 0, 1, this.position.x, this.position.y);
 		ctx.rotate(this.orientation);
 		ctx.transform(1, 0, 0, 1, -this.size/2, -this.size/2);
@@ -615,12 +665,23 @@ class Collectible extends GameObject {
 		ctx.strokeStyle = this.outlineColor;
 		ctx.lineWidth = 3;
 		ctx.strokeRect(0, 0, this.size, this.size);
+
+		if (this.isDamaged) {
+			transformToCameraCoords();
+			ctx.transform(1, 0, 0, 1, this.position.x, this.position.y);
+			this.healthBar.draw(ctx);
+		}
+	}
+
+	takeDamage(dmgAmt) {
+		this.isDamaged = true;
+		super.takeDamage(dmgAmt);
 	}
 }
 
 module.exports = Collectible;
 
-},{"../lib/Globals":3,"../lib/Rectangle":5,"../lib/Vector2D":7,"./GameObject":11}],11:[function(require,module,exports){
+},{"../lib/Globals":3,"../lib/Rectangle":5,"../lib/Vector2D":7,"./GameObject":11,"./HealthBar":13}],11:[function(require,module,exports){
 'use strict';
 
 var Rectangle = require('../lib/Rectangle');
@@ -652,7 +713,7 @@ class GameObject {
 		throw new Error("Abstract method called: GameObject.prototype.update().");
 	}
 	
-	draw(ctx) {
+	draw(ctx, transformToCameraCoords) {
 		throw new Error("Abstract method called: GameObject.prototype.draw().");
 	}
 	
@@ -696,9 +757,6 @@ var Vector2D = require('../lib/Vector2D');
 var SpatialHash = require('spatialhash-2d');
 var Globals = require('../lib/Globals');
 
-var updateCount = 0;
-var accumTime;
-
 class GameState {	
 	constructor(worldWidth, worldHeight) {
 		this.worldWidth = worldWidth;
@@ -723,16 +781,13 @@ class GameState {
 
 		this.spatialHash.insert(this.player);
 
+		document.getElementById("grid").draggable = false;
 		this.grid = document.getElementById("grid");
 		
 		this.prevTime = Date.now();
 	}
 	
-	update(input) {
-		if (updateCount === 0) {
-			accumTime = 0;
-		}
-		
+	update(input) {		
 		let currTime = Date.now();
 		let deltaTime = (currTime - this.prevTime) / 1000;
 		this.prevTime = currTime;
@@ -745,35 +800,29 @@ class GameState {
 
 		this.detectCollisions();
 
-		accumTime += Date.now() - currTime;
-		updateCount++;
-		if (updateCount >= 100) {
-			//console.log(accumTime);
-			updateCount = 0;
-		}
-
 		return this.player.health > 0;
 	}
 	
 	draw(ctx) {
-		let cameraTranslate = {
-			x: Globals.canvas.width/2 - this.player.position.x,
-			y: Globals.canvas.height/2 - this.player.position.y
+		let playerPosition = this.player.position;
+		let transformToCameraCoords = function() {
+			ctx.setTransform(1, 0, 0, 1, 
+				Globals.canvas.width/2 - playerPosition.x, 
+				Globals.canvas.height/2 - playerPosition.y
+			);
 		};
 
-		ctx.setTransform(1, 0, 0, 1, cameraTranslate.x, cameraTranslate.y);
-		this.drawBackground(ctx);
+		this.drawBackground(ctx, transformToCameraCoords);
 		if (this.player.health > 0) {	
-			this.player.draw(ctx);
+			this.player.draw(
+				ctx,
+				function() {
+					ctx.setTransform(1, 0, 0, 1, Globals.canvas.width/2, Globals.canvas.height/2);
+				}
+			);
 		}
-		for (let i = 0; i < this.bullets.length; i++) {
-			ctx.setTransform(1, 0, 0, 1, cameraTranslate.x, cameraTranslate.y);
-			this.bullets[i].draw(ctx);
-		}
-		for (let i = 0; i < this.collectibles.length; i++) {
-			ctx.setTransform(1, 0, 0, 1, cameraTranslate.x, cameraTranslate.y);
-			this.collectibles[i].draw(ctx);
-		}
+		this.bullets.map(function(bullet) { bullet.draw(ctx, transformToCameraCoords); });
+		this.collectibles.map(function(collectible) { collectible.draw(ctx, transformToCameraCoords); });
 	}
 	
 	updatePlayer(input, deltaTime) {
@@ -916,7 +965,8 @@ class GameState {
 		/**/
 	}
 
-	drawBackground(ctx) {
+	drawBackground(ctx, transformToCameraCoords) {
+		transformToCameraCoords();
 		ctx.rect(0, 0, this.worldWidth, this.worldHeight);
 		ctx.fillStyle = ctx.createPattern(this.grid, "repeat");
 		ctx.fill();
@@ -1092,26 +1142,21 @@ class Player extends GameObject {
 		return adjustedPlayerVelocity;
 	}
 	
-	draw(ctx) {
-		let cameraTranslate = {
-			x: Globals.canvas.width/2,
-			y: Globals.canvas.height/2
-		};
-
-		ctx.setTransform(1, 0, 0, 1, cameraTranslate.x, cameraTranslate.y);
+	draw(ctx, transformToCameraCoords) {
+		transformToCameraCoords();
 		ctx.beginPath();
 		ctx.arc(0, 0, this.radius, 0, 2*Math.PI);
 		ctx.fillStyle = this.color;
 		ctx.fill();
 
-		ctx.setTransform(1, 0, 0, 1, cameraTranslate.x, cameraTranslate.y);
+		transformToCameraCoords();
 		ctx.rotate(this.orientation);
 		this.weapon.draw(ctx);
 
-		ctx.setTransform(1, 0, 0, 1, cameraTranslate.x, cameraTranslate.y);
+		transformToCameraCoords();
 		this.healthBar.draw(ctx);
 		
-		ctx.setTransform(1, 0, 0, 1, cameraTranslate.x, cameraTranslate.y);
+		transformToCameraCoords();
 		ctx.beginPath();
 		ctx.arc(0, 0, this.radius, 0, 2*Math.PI);
 		ctx.strokeStyle = this.outlineColor;

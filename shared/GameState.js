@@ -6,9 +6,6 @@ var Vector2D = require('../lib/Vector2D');
 var SpatialHash = require('spatialhash-2d');
 var Globals = require('../lib/Globals');
 
-var updateCount = 0;
-var accumTime;
-
 class GameState {	
 	constructor(worldWidth, worldHeight) {
 		this.worldWidth = worldWidth;
@@ -33,16 +30,13 @@ class GameState {
 
 		this.spatialHash.insert(this.player);
 
+		document.getElementById("grid").draggable = false;
 		this.grid = document.getElementById("grid");
 		
 		this.prevTime = Date.now();
 	}
 	
-	update(input) {
-		if (updateCount === 0) {
-			accumTime = 0;
-		}
-		
+	update(input) {		
 		let currTime = Date.now();
 		let deltaTime = (currTime - this.prevTime) / 1000;
 		this.prevTime = currTime;
@@ -55,35 +49,29 @@ class GameState {
 
 		this.detectCollisions();
 
-		accumTime += Date.now() - currTime;
-		updateCount++;
-		if (updateCount >= 100) {
-			//console.log(accumTime);
-			updateCount = 0;
-		}
-
 		return this.player.health > 0;
 	}
 	
 	draw(ctx) {
-		let cameraTranslate = {
-			x: Globals.canvas.width/2 - this.player.position.x,
-			y: Globals.canvas.height/2 - this.player.position.y
+		let playerPosition = this.player.position;
+		let transformToCameraCoords = function() {
+			ctx.setTransform(1, 0, 0, 1, 
+				Globals.canvas.width/2 - playerPosition.x, 
+				Globals.canvas.height/2 - playerPosition.y
+			);
 		};
 
-		ctx.setTransform(1, 0, 0, 1, cameraTranslate.x, cameraTranslate.y);
-		this.drawBackground(ctx);
+		this.drawBackground(ctx, transformToCameraCoords);
 		if (this.player.health > 0) {	
-			this.player.draw(ctx);
+			this.player.draw(
+				ctx,
+				function() {
+					ctx.setTransform(1, 0, 0, 1, Globals.canvas.width/2, Globals.canvas.height/2);
+				}
+			);
 		}
-		for (let i = 0; i < this.bullets.length; i++) {
-			ctx.setTransform(1, 0, 0, 1, cameraTranslate.x, cameraTranslate.y);
-			this.bullets[i].draw(ctx);
-		}
-		for (let i = 0; i < this.collectibles.length; i++) {
-			ctx.setTransform(1, 0, 0, 1, cameraTranslate.x, cameraTranslate.y);
-			this.collectibles[i].draw(ctx);
-		}
+		this.bullets.map(function(bullet) { bullet.draw(ctx, transformToCameraCoords); });
+		this.collectibles.map(function(collectible) { collectible.draw(ctx, transformToCameraCoords); });
 	}
 	
 	updatePlayer(input, deltaTime) {
@@ -226,7 +214,8 @@ class GameState {
 		/**/
 	}
 
-	drawBackground(ctx) {
+	drawBackground(ctx, transformToCameraCoords) {
+		transformToCameraCoords();
 		ctx.rect(0, 0, this.worldWidth, this.worldHeight);
 		ctx.fillStyle = ctx.createPattern(this.grid, "repeat");
 		ctx.fill();

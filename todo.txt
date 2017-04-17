@@ -1,8 +1,6 @@
-- Review diff for commit
-- Display health bar for collectibles
+- Client/Server interaction
 - Player should be slightly offset from center of canvas depending on movement
 - Move bullets to Weapon class
-- Client/Server interaction
 
 - Add comments
 

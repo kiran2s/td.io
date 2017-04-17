@@ -103,26 +103,21 @@ class Player extends GameObject {
 		return adjustedPlayerVelocity;
 	}
 	
-	draw(ctx) {
-		let cameraTranslate = {
-			x: Globals.canvas.width/2,
-			y: Globals.canvas.height/2
-		};
-
-		ctx.setTransform(1, 0, 0, 1, cameraTranslate.x, cameraTranslate.y);
+	draw(ctx, transformToCameraCoords) {
+		transformToCameraCoords();
 		ctx.beginPath();
 		ctx.arc(0, 0, this.radius, 0, 2*Math.PI);
 		ctx.fillStyle = this.color;
 		ctx.fill();
 
-		ctx.setTransform(1, 0, 0, 1, cameraTranslate.x, cameraTranslate.y);
+		transformToCameraCoords();
 		ctx.rotate(this.orientation);
 		this.weapon.draw(ctx);
 
-		ctx.setTransform(1, 0, 0, 1, cameraTranslate.x, cameraTranslate.y);
+		transformToCameraCoords();
 		this.healthBar.draw(ctx);
 		
-		ctx.setTransform(1, 0, 0, 1, cameraTranslate.x, cameraTranslate.y);
+		transformToCameraCoords();
 		ctx.beginPath();
 		ctx.arc(0, 0, this.radius, 0, 2*Math.PI);
 		ctx.strokeStyle = this.outlineColor;

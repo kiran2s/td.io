@@ -21,8 +21,8 @@ class Bullet extends GameObject {
 		this.updateRange();
 	}
 	
-	draw(ctx) {
-		//ctx.setTransform(1, 0, 0, 1, 0, 0);
+	draw(ctx, transformToCameraCoords) {
+		transformToCameraCoords();
 		ctx.beginPath();
 		ctx.arc(this.position.x, this.position.y, this.radius, 0, Globals.DEGREES_360);
 		ctx.fillStyle = this.color;

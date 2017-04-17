@@ -29,7 +29,7 @@ class GameObject {
 		throw new Error("Abstract method called: GameObject.prototype.update().");
 	}
 	
-	draw(ctx) {
+	draw(ctx, transformToCameraCoords) {
 		throw new Error("Abstract method called: GameObject.prototype.draw().");
 	}
 	
