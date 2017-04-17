@@ -32,6 +32,8 @@ class Client {
 		
 		this.keyboard = new KeyboardState();
 		this.mouse = new MouseState();
+
+		document.ondragstart = function(event) { return false };
 		
 		window.onresize = this.onWindowResize.bind(this);
 	}
