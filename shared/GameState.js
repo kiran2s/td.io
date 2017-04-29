@@ -19,6 +19,7 @@ class GameState {
 		this.bullets = [];
 		this.collectibles = [];
 		this.spatialHash = new SpatialHash( { x: 0, y: 0, width: this.worldWidth, height: this.worldHeight }, 80); //new spatial-hash
+
 		
 		for (let i = 0; i < 100; i++) {
 			let cX = Math.floor(Math.random() * worldWidth);

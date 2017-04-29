@@ -35,8 +35,8 @@ class GameObject {
 	
 	getHitBox() {
 		return new Rectangle(
-			this.position.x - this.size/2,
-			this.position.y - this.size/2,
+			this.position.x-size/2,  
+			this.position.y-size/2,  
 			this.size,
 			this.size
 		);
