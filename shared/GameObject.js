@@ -16,10 +16,10 @@ class GameObject {
 
 		// spatialhash-2d variables begin
 		this.range = {
-			x: this.position.x,
-			y: this.position.y,
-			w: this.size/2,
-			h: this.size/2
+			x: this.position.x-this.size/2, //new spatial-hash
+			y: this.position.y-this.size/2, //new spatial-hash
+			width: this.size, //new spatial-hash
+			height: this.size //new spatial-hash
 		};
 		this.__b = undefined;
 		// spatialhash-2d variables end
@@ -43,8 +43,8 @@ class GameObject {
 	}
 
 	updateRange() {
-		this.range.x = this.position.x;
-		this.range.y = this.position.y;
+		this.range.x = this.position.x-this.size/2; //new spatial-hash
+		this.range.y = this.position.y-this.size/2; //new spatial-hash
 	}
 
 	takeDamage(dmgAmt) {

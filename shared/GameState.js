@@ -3,7 +3,7 @@
 var Player = require('./Player');
 var Collectible = require('./Collectible');
 var Vector2D = require('../lib/Vector2D');
-var SpatialHash = require('spatialhash-2d');
+var SpatialHash = require('spatial-hash'); //new spatial-hash
 var Globals = require('../lib/Globals');
 
 class GameState {	
@@ -18,7 +18,7 @@ class GameState {
 		);
 		this.bullets = [];
 		this.collectibles = [];
-		this.spatialHash = new SpatialHash( { x: this.worldWidth/2, y: this.worldHeight/2, w: this.worldWidth/2, h: this.worldHeight/2 }, 80);
+		this.spatialHash = new SpatialHash( { x: 0, y: 0, width: this.worldWidth, height: this.worldHeight }, 80); //new spatial-hash
 		
 		for (let i = 0; i < 100; i++) {
 			let cX = Math.floor(Math.random() * worldWidth);
@@ -227,11 +227,11 @@ class GameState {
 	}
 
 	findBuckets(gameObject) {
-		let bucketSize = this.spatialHash.bucketSize;
+		let bucketSize = this.spatialHash.cellSize; //new spatial-hash
 		let positionX = gameObject.position.x;
 		let positionY = gameObject.position.y;
-		let halfWidth = gameObject.range.w;
-		let halfHeight = gameObject.range.h;
+		let halfWidth = gameObject.range.width/2; //new spatial-hash
+		let halfHeight = gameObject.range.height/2; //new spatial-hash
 
 		let firstBucketX = Math.floor((positionX - halfWidth) / bucketSize);
 		let lastBucketX = Math.floor((positionX + halfWidth) / bucketSize);

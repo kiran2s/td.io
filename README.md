@@ -21,20 +21,25 @@ $ npm install socket.io --save
 $ npm install node-uuid --save
 ```
 
-#### Step 4: Install Browserify
+#### Step 5: Install SpatialHash
+```
+$ npm install spatial-hash --save
+```
+
+#### Step 6: Install Browserify
 ```
 $ npm install -g browserify
 ```
 
-#### Step 5: Bundle required modules with Browserify
+#### Step 7: Bundle required modules with Browserify
 ```
 $ browserify client/index.js -o bundle.js
 ```
 
-#### Step 6: Run Server
+#### Step 8: Run Server
 ```
 $ node server/Server.js
 ```
 
-#### Step 7: Open in Browser
+#### Step 9: Open in Browser
 Go to localhost:4004
