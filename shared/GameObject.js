@@ -16,10 +16,10 @@ class GameObject {
 
 		// spatialhash-2d variables begin
 		this.range = {
-			x: this.position.x,
-			y: this.position.y,
-			w: this.size/2,
-			h: this.size/2
+			x: this.position.x-size/2, //this.position.x
+			y: this.position.y-size/2, //this.position.y
+			width: this.size, ///2
+			height: this.size ///2
 		};
 		this.__b = undefined;
 		// spatialhash-2d variables end
@@ -35,8 +35,8 @@ class GameObject {
 	
 	getHitBox() {
 		return new Rectangle(
-			this.position.x - this.size/2,
-			this.position.y - this.size/2,
+			this.position.x-size/2,  
+			this.position.y-size/2,  
 			this.size,
 			this.size
 		);

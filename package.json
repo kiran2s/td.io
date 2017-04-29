@@ -7,6 +7,6 @@
     "express": "^4.15.2",
     "node-uuid": "^1.4.8",
     "socket.io": "^1.7.3",
-    "spatialhash-2d": "^1.0.31"
+    "spatial-hash": "^0.0.3"
   }
 }
