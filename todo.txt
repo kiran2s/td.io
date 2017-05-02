@@ -1,4 +1,8 @@
-- Client/Server interaction
+- Entity interpolation
+- Commit code with Colin
+- Review code
+- Corrent deltaTime functionality
+
 - Player should be slightly offset from center of canvas depending on movement
 - Move bullets to Weapon class
 

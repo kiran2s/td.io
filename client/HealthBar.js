@@ -1,12 +1,11 @@
 'use strict';
 
-var GameObject = require('./GameObject');
-var Rectangle = require('../lib/Rectangle');
-var Vector2D = require('../lib/Vector2D');
+var GameObject = require('../shared/GameObject');
 
 class HealthBar extends GameObject {
 	constructor(position, size) {
-		super(new Vector2D(0, 0), position, size, 'rgba(0,215,100,1)');
+		super(position, size, 'rgba(0,215,100,1)');
+
         this.outlineColor = 'rgba(80,80,80,1)';
         this.halfLength = this.size/2;
         this.width = 6;

@@ -1,14 +1,14 @@
 (function e(t,n,r){function s(o,u){if(!n[o]){if(!t[o]){var a=typeof require=="function"&&require;if(!u&&a)return a(o,!0);if(i)return i(o,!0);var f=new Error("Cannot find module '"+o+"'");throw f.code="MODULE_NOT_FOUND",f}var l=n[o]={exports:{}};t[o][0].call(l.exports,function(e){var n=t[o][1][e];return s(n?n:e)},l,l.exports,e,t,n,r)}return n[o].exports}var i=typeof require=="function"&&require;for(var o=0;o<r.length;o++)s(r[o]);return s})({1:[function(require,module,exports){
 'use strict';
 
-var GameState = require('../shared/GameState');
+var ClientGameState = require('./ClientGameState');
+var InputUpdate = require('../shared/InputUpdate');
+var ClientBullet = require('./ClientBullet');
+var ClientCollectible = require('./ClientCollectible');
 var KeyboardState = require('../lib/THREEx.KeyboardState');
 var MouseState = require('../lib/MouseState');
 var Vector2D = require('../lib/Vector2D');
 var Globals = require('../lib/Globals');
-
-var WORLD_WIDTH = 4000;
-var WORLD_HEIGHT = 4000;
 
 var prevTime = Date.now();
 var frameCount = 0;
@@ -19,16 +19,26 @@ var accumTime = 0;
 var timePerUpdate = 0;
 
 class Client {
-	constructor() {		
+	constructor() {
+		this.gamestateReceived = false;		
 		this.socket = io();
+
+		this.socket.on('init', this.handleInitFromServer.bind(this));
+		this.socket.on('update', this.handleUpdateFromServer.bind(this));
 		
-		this.canvas = Globals.canvas;
+		this.canvas = document.getElementById('canvas');
 		this.canvas.width = window.innerWidth;
 		this.canvas.height = window.innerHeight;
 		
 		this.ctx = this.canvas.getContext('2d');
 
-		this.gamestate = new GameState(WORLD_WIDTH, WORLD_HEIGHT);
+		if (this.gamestate === undefined) {
+			this.gamestate = null;
+		}
+		this.gameStateUpdates = [];
+		this.inputUpdates = [];
+		this.currentSequenceNumber = 0;
+		this.entityInterpolationOffset = 100;
 		
 		this.keyboard = new KeyboardState();
 		this.mouse = new MouseState();
@@ -37,14 +47,43 @@ class Client {
 		
 		window.onresize = this.onWindowResize.bind(this);
 	}
-	
+
 	run() {
-		this.gameStateUpdateID = setInterval(this.gameStateUpdate.bind(this), 15);
-		window.requestAnimationFrame(this.drawUpdate.bind(this));
+		this.prevTime = Date.now();
+		this.updateGameStateID = setInterval(this.updateGameState.bind(this), 15);
+		window.requestAnimationFrame(this.draw.bind(this));
+	}
+
+	handleInitFromServer(data) {
+		this.ID = data.clientID;
+		this.gameStateUpdates.push(data.gameStateUpdate);
+		this.currentSequenceNumber = data.gameStateUpdate.sequenceNumber;
+		this.gamestate = new ClientGameState(data.worldWidth, data.worldHeight, data.gameStateUpdate.players[this.ID]);
+		this.gamestateReceived = true;
+	}
+
+	handleUpdateFromServer(gameStateUpdate) {
+		let currTime = Date.now();
+		this.gameStateUpdates.push(gameStateUpdate);
+		let discardIndex = this.getInterpolationIndex(currTime) - 1;
+		if (discardIndex >= 0) {
+			this.gameStateUpdates.splice(0, discardIndex + 1);
+		}
+
+		discardIndex = this.inputUpdates.findIndex(
+			function(inputUpdate) {
+				return inputUpdate.sequenceNumber === gameStateUpdate.sequenceNumber;
+			}
+		);
+		if (discardIndex !== -1) {
+			this.inputUpdates.splice(0, discardIndex + 1);
+		}
 	}
 	
-	gameStateUpdate() {
+	updateGameState() {
 		let currTime = Date.now();
+		let deltaTime = (currTime - this.prevTime) / 1000;
+		this.prevTime = currTime;
 
 		let keys = { numDirKeysPressed: 0 };
 		let dirKeys = "WASD";
@@ -62,38 +101,43 @@ class Client {
 				keys[currKey] = true;
 			}
 		}
-		if (this.keyboard.pressed('1')) {
+		if (this.keyboard.pressed('F')) {
 			keys['F'] = true;
 		}
 		if (this.keyboard.pressed('space')) {
 			keys['space'] = true;
 		}
 		
-		let mousePos = new Vector2D(this.mouse.x, this.mouse.y);
+		let mouseDirection = new Vector2D(this.mouse.x, this.mouse.y).sub(new Vector2D(this.canvas.width/2, this.canvas.height/2));
 		
-		let mouseLeftButtonDown = this.mouse.isLeftButtonDown;
+		let inputUpdate = new InputUpdate(++this.currentSequenceNumber, keys, mouseDirection, this.mouse.isLeftButtonDown);
+		this.inputUpdates.push(inputUpdate);
+		this.socket.emit('update', inputUpdate);
 		
-		let input = {
-			keysPressed: keys,
-			mousePosition: mousePos,
-			isMouseLeftButtonDown: mouseLeftButtonDown
-		};
-		
-		let playState = false;
-		if (this.gamestate !== undefined) {
-			playState = this.gamestate.update(input);
+		//let playState = false;
+		if (this.gamestate !== null) {
+			//playState = this.gamestate.update(input);
+			this.gamestate.setPlayerProperties(this.gameStateUpdates[this.gameStateUpdates.length-1].players[this.ID]);
+			for (let i = 0; i < this.inputUpdates.length; i++) {
+				this.gamestate.updatePlayer(
+					this.inputUpdates[i],
+					deltaTime
+				);
+			}
 		}
+		// TODO
 		else {
-			if (mouseLeftButtonDown || 'space' in keys) {
-				this.gamestate = new GameState(WORLD_WIDTH, WORLD_HEIGHT);
-				playState = true;
-				window.requestAnimationFrame(this.drawUpdate.bind(this));
+			if (inputUpdate.isMouseLeftButtonDown || 'space' in keys) {
+				//this.gamestate = new ClientGameState(Globals.WORLD_WIDTH, Globals.WORLD_HEIGHT);
+				//playState = true;
 			}
 		}
 
+		/*
 		if (!playState) {
-			this.gamestate = undefined;
+			this.gamestate = null;
 		}
+		*/
 
 		accumTime += Date.now() - currTime;
 		updateCount++;
@@ -104,19 +148,23 @@ class Client {
 		}
 	}
 	
-	drawUpdate() {
+	draw() {
 		this.ctx.setTransform(1, 0, 0, 1, 0, 0);
 		this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
 		
-		if (this.gamestate === undefined) {
-			this.ctx.fillStyle = "red";
-			this.ctx.font = '100px Arial';
-			let msg = "YOU DEAD";
-			this.ctx.fillText(msg, this.canvas.width/2 - this.ctx.measureText(msg).width/2, this.canvas.height/2);
+		if (this.gamestate === null) {
+			if (this.gamestateReceived) {
+				this.ctx.fillStyle = "red";
+				this.ctx.font = '100px Arial';
+				let msg = "YOU DEAD";
+				this.ctx.fillText(msg, this.canvas.width/2 - this.ctx.measureText(msg).width/2, this.canvas.height/2);
+			}
+			window.requestAnimationFrame(this.draw.bind(this));
 			return;
 		}
 
-		this.gamestate.draw(this.ctx);
+		let entities = this.performEntityInterpolation();
+		this.gamestate.draw(this.ctx, entities.bullets, entities.collectibles);
 		
 		this.ctx.setTransform(1, 0, 0, 1, 0, 0);
 		this.ctx.fillStyle = "purple";
@@ -137,10 +185,129 @@ class Client {
 		this.ctx.fillText("Frame rate: " + frameRate, 20, 30);
 		this.ctx.fillText("Update time: " + timePerUpdate + "ms", 20, 50);
 
-		window.requestAnimationFrame(this.drawUpdate.bind(this));
+		window.requestAnimationFrame(this.draw.bind(this));
+	}
+
+	performEntityInterpolation() {
+		let currTime = Date.now();
+		let bullets = [];
+		let collectibles = [];
+
+		let interpolationIndex = this.getInterpolationIndex(currTime);
+		let gameStateUpdate_1 = this.gameStateUpdates[interpolationIndex];
+
+		if (interpolationIndex === this.gameStateUpdates.length - 1) {
+			for (let id in gameStateUpdate_1.bullets) {
+				let bullet = gameStateUpdate_1.bullets[id];
+				bullets.push(
+					new ClientBullet(
+						bullet.position, 
+						bullet.radius, 
+						bullet.health, 
+						bullet.color, 
+						bullet.outlineColor
+					)
+				);
+			}
+			for (let id in gameStateUpdate_1.collectibles) {
+				let collectible = gameStateUpdate_1.collectibles[id];
+				collectibles.push(
+					new ClientCollectible(
+						collectible.position, 
+						collectible.size, 
+						collectible.orientation, 
+						collectible.health, 
+						collectible.color, 
+						collectible.outlineColor
+					)
+				);
+			}
+		}
+		else {
+			let gameStateUpdate_2 = this.gameStateUpdates[interpolationIndex + 1];
+			let interpolationTime = currTime - this.entityInterpolationOffset;
+			let serverDiffTime = gameStateUpdate_2.serverTime - gameStateUpdate_1.serverTime;
+			let interpolationFactor = (interpolationTime - gameStateUpdate_1.serverTime) / serverDiffTime;
+			let antiInterpolationFactor = 1 - interpolationFactor;
+
+			for (let id in gameStateUpdate_2.bullets) {
+				let bullet_2 = gameStateUpdate_2.bullets[id];
+				if (id in gameStateUpdate_1.bullets) {
+					let bullet_1 = gameStateUpdate_1.bullets[id];
+					var interpX = antiInterpolationFactor * bullet_1.position.x + interpolationFactor * bullet_2.position.x;
+					var interpY = antiInterpolationFactor * bullet_1.position.y + interpolationFactor * bullet_2.position.y;
+				}
+				else {
+					var interpX = bullet_2.position.x;
+					var interpY = bullet_2.position.y;
+				}
+
+				bullets.push(
+					new ClientBullet(
+						{
+							x: interpX,
+							y: interpY
+						}, 
+						bullet_2.radius, 
+						bullet_2.health, 
+						bullet_2.color, 
+						bullet_2.outlineColor
+					)
+				);
+			}
+
+			for (let id in gameStateUpdate_2.collectibles) {
+				let collectible_2 = gameStateUpdate_2.collectibles[id];
+				if (id in gameStateUpdate_1.collectibles) {
+					let collectible_1 = gameStateUpdate_1.collectibles[id];
+					var interpX = antiInterpolationFactor * collectible_1.position.x + interpolationFactor * collectible_2.position.x;
+					var interpY = antiInterpolationFactor * collectible_1.position.y + interpolationFactor * collectible_2.position.y;
+					var interpOrientation = antiInterpolationFactor * collectible_1.orientation + interpolationFactor * collectible_2.orientation;
+				}
+				else {
+					var interpX = collectible_2.position.x;
+					var interpY = collectible_2.position.y;
+					var interpOrientation = collectible_2.orientation;
+				}
+
+				collectibles.push(
+					new ClientCollectible(
+						{
+							x: interpX,
+							y: interpY
+						}, 
+						collectible_2.size, 
+						interpOrientation, 
+						collectible_2.health, 
+						collectible_2.color, 
+						collectible_2.outlineColor
+					)
+				);
+			}
+		}
+
+		return {
+			bullets: bullets,
+			collectibles: collectibles
+		}
+	}
+
+	getInterpolationIndex(currTime) {
+		let interpolationIndex = this.gameStateUpdates.findIndex(
+			function(gameStateUpdate) {
+				return (currTime - gameStateUpdate.serverTime) < this.entityInterpolationOffset;
+			}.bind(this)
+		);
+		if (interpolationIndex === -1) {
+			interpolationIndex = this.gameStateUpdates.length - 1;
+		}
+		else if (interpolationIndex > 0) {
+			interpolationIndex--;
+		}
+
+		return interpolationIndex;
 	}
 	
-	// TODO: gamestate should not be updated
 	onWindowResize(event) {
 		this.canvas.width = window.innerWidth;
 		this.canvas.height = window.innerHeight;
@@ -149,26 +316,293 @@ class Client {
 
 module.exports = Client;
 
-},{"../lib/Globals":3,"../lib/MouseState":4,"../lib/THREEx.KeyboardState":6,"../lib/Vector2D":7,"../shared/GameState":12}],2:[function(require,module,exports){
+},{"../lib/Globals":9,"../lib/MouseState":10,"../lib/THREEx.KeyboardState":11,"../lib/Vector2D":12,"../shared/InputUpdate":17,"./ClientBullet":2,"./ClientCollectible":3,"./ClientGameState":4}],2:[function(require,module,exports){
+'use strict';
+
+var Bullet = require('../shared/Bullet');
+var Vector2D = require('../lib/Vector2D');
+var Globals = require('../lib/Globals');
+
+class ClientBullet extends Bullet {
+	constructor(position, radius = 7, health = 1, color = "black", outlineColor = 'rgba(80,80,80,1)') {
+		super(new Vector2D(position.x, position.y), radius, health, color, outlineColor);
+	}
+	
+	draw(ctx, transformToCameraCoords) {
+		transformToCameraCoords();
+		ctx.beginPath();
+		ctx.arc(this.position.x, this.position.y, this.radius, 0, Globals.DEGREES_360);
+		ctx.fillStyle = this.color;
+		ctx.fill();
+		ctx.strokeStyle = this.outlineColor;
+		ctx.lineWidth = 2;
+		ctx.stroke();
+	}
+}
+
+module.exports = ClientBullet;
+
+},{"../lib/Globals":9,"../lib/Vector2D":12,"../shared/Bullet":13}],3:[function(require,module,exports){
+'use strict';
+
+var Collectible = require('../shared/Collectible');
+var HealthBar = require('./HealthBar');
+var Vector2D = require('../lib/Vector2D');
+
+class ClientCollectible extends Collectible {
+	constructor(position, size, orientation, health, color, outlineColor) {
+		super(new Vector2D(position.x, position.y), health);
+		this.size = size;
+		this.orientation = orientation;
+		this.color = color;
+		this.outlineColor = outlineColor;
+
+		this.healthBar = new HealthBar(new Vector2D(0, this.size + 10), this.size * 1.5);
+	}
+	
+	draw(ctx, transformToCameraCoords) {
+		transformToCameraCoords();
+		ctx.transform(1, 0, 0, 1, this.position.x, this.position.y);
+		ctx.rotate(this.orientation);
+		ctx.transform(1, 0, 0, 1, -this.size/2, -this.size/2);
+		ctx.fillStyle = this.color;
+		ctx.fillRect(0, 0, this.size, this.size);
+		
+		ctx.strokeStyle = this.outlineColor;
+		ctx.lineWidth = 3;
+		ctx.strokeRect(0, 0, this.size, this.size);
+
+		if (this.health < 100) {
+			this.healthBar.update(this.health);
+			transformToCameraCoords();
+			ctx.transform(1, 0, 0, 1, this.position.x, this.position.y);
+			this.healthBar.draw(ctx);
+		}
+	}
+}
+
+module.exports = ClientCollectible;
+
+},{"../lib/Vector2D":12,"../shared/Collectible":14,"./HealthBar":7}],4:[function(require,module,exports){
+'use strict';
+
+var GameState = require('../shared/GameState');
+var ClientPlayer = require('./ClientPlayer');
+var Vector2D = require('../lib/Vector2D');
+var Globals = require('../lib/Globals');
+
+class ClientGameState extends GameState {
+    constructor(worldWidth, worldHeight, playerUpdateProperties) {
+        super(worldWidth, worldHeight);
+
+		this.player = new ClientPlayer(playerUpdateProperties);
+
+		this.canvas = document.getElementById('canvas');
+		document.getElementById("grid").draggable = false;
+		this.grid = document.getElementById("grid");
+    }
+	
+	draw(ctx, bullets, collectibles) {
+		let playerPosition = this.player.position;
+		let canvas = this.canvas;
+		let transformToCameraCoords = function() {
+			ctx.setTransform(1, 0, 0, 1, 
+				canvas.width/2 - playerPosition.x, 
+				canvas.height/2 - playerPosition.y
+			);
+		};
+
+		this.drawBackground(ctx, transformToCameraCoords);
+		this.player.draw(
+			ctx,
+			function() {
+				ctx.setTransform(1, 0, 0, 1, canvas.width/2, canvas.height/2);
+			}
+		);
+		bullets.map(function(bullet) { bullet.draw(ctx, transformToCameraCoords); });
+		collectibles.map(function(collectible) { collectible.draw(ctx, transformToCameraCoords); });
+	}
+
+	setPlayerProperties(playerUpdateProperties) {
+		this.player.setUpdateProperties(playerUpdateProperties);
+	}
+	
+	updatePlayer(input, deltaTime) {
+		this.player.update(
+			deltaTime, 
+			input.keysPressed, 
+			input.mouseDirection
+		);
+	}
+
+	drawBackground(ctx, transformToCameraCoords) {
+		transformToCameraCoords();
+		ctx.rect(0, 0, this.worldWidth, this.worldHeight);
+		ctx.fillStyle = ctx.createPattern(this.grid, "repeat");
+		ctx.fill();
+	}
+}
+
+module.exports = ClientGameState;
+
+},{"../lib/Globals":9,"../lib/Vector2D":12,"../shared/GameState":16,"./ClientPlayer":5}],5:[function(require,module,exports){
+'use strict';
+
+var Player = require('../shared/Player');
+var ClientWeapon = require('./ClientWeapon');
+var HealthBar = require('./HealthBar');
+var Vector2D = require('../lib/Vector2D');
+var Globals = require('../lib/Globals');
+
+const DIAG_ACCEL_FACTOR = Math.cos(Math.PI/4);
+
+class ClientPlayer extends Player {
+	constructor(playerUpdateProperties) {
+		super(playerUpdateProperties.velocity, playerUpdateProperties.position, playerUpdateProperties.color);
+
+		this.setUpdateProperties(playerUpdateProperties);
+		this.healthBar = new HealthBar(new Vector2D(0, this.radius + 12), this.radius * 2.5);
+	}
+
+	setUpdateProperties(playerUpdateProperties) {
+		this.velocity = new Vector2D(playerUpdateProperties.velocity.x, playerUpdateProperties.velocity.y);
+		this.position = new Vector2D(playerUpdateProperties.position.x, playerUpdateProperties.position.y);
+		this.size = playerUpdateProperties.size;
+		this.acceleration = playerUpdateProperties.acceleration;
+		this.deceleration = playerUpdateProperties.deceleration;
+		this.maxSpeed = playerUpdateProperties.maxSpeed;
+		this.minSpeed = playerUpdateProperties.minSpeed;
+		this.radius = this.size/2;
+		this.orientation = playerUpdateProperties.orientation;
+		this.health = playerUpdateProperties.health;
+		let weapon = playerUpdateProperties.weapon;
+		this.weapon = new ClientWeapon(weapon.name, weapon.distanceFromPlayer, weapon.size, weapon.color, weapon.outlineColor);
+		this.color = playerUpdateProperties.color;
+		this.outlineColor = playerUpdateProperties.outlineColor;
+	}
+	
+	update(deltaTime, keysPressed, mouseDirection) {
+		this.healthBar.update(this.health);
+		return super.update(deltaTime, keysPressed, mouseDirection);
+	}
+	
+	draw(ctx, transformToCameraCoords) {
+		transformToCameraCoords();
+		ctx.beginPath();
+		ctx.arc(0, 0, this.radius, 0, 2*Math.PI);
+		ctx.fillStyle = this.color;
+		ctx.fill();
+
+		transformToCameraCoords();
+		ctx.rotate(this.orientation);
+		this.weapon.draw(ctx);
+
+		transformToCameraCoords();
+		this.healthBar.draw(ctx);
+		
+		transformToCameraCoords();
+		ctx.beginPath();
+		ctx.arc(0, 0, this.radius, 0, 2*Math.PI);
+		ctx.strokeStyle = this.outlineColor;
+		ctx.lineWidth = 3;
+		ctx.stroke();
+	}
+}
+
+module.exports = ClientPlayer;
+
+},{"../lib/Globals":9,"../lib/Vector2D":12,"../shared/Player":18,"./ClientWeapon":6,"./HealthBar":7}],6:[function(require,module,exports){
+'use strict';
+
+var Weapon = require('../shared/Weapon');
+
+class ClientWeapon extends Weapon {
+	constructor(name, distanceFromPlayer, size, color, outlineColor) {
+		super(name, distanceFromPlayer, size, color, outlineColor);
+	}
+	
+	draw(ctx) {
+		ctx.transform(1, 0, 0, 1, this.position.x, this.position.y);
+		ctx.fillStyle = this.color;
+		ctx.fillRect(0, 0, this.size, this.size);
+		
+		ctx.strokeStyle = this.outlineColor;
+		ctx.lineWidth = 3;
+		ctx.strokeRect(0, 0, this.size, this.size);
+	}
+}
+
+/*
+// dark grey: 'rgba(80,80,80,1)'
+var ClientWeaponFactory = {
+						//name				dist		  		size	color					damage	health	speed	rate	spread	rad	exp		bullet color			bullet outline color
+	makePlebPistol: function(distanceFromPlayer) {
+		return new ClientWeapon("Pleb Pistol", distanceFromPlayer, 19, 'rgba(255,0,128,1)');
+	},
+	makeFlameThrower: function(distanceFromPlayer) {
+		return new ClientWeapon("Flame Thrower", distanceFromPlayer, 20, 'rgba(255,140,0,1)');
+	},
+	makeVolcano: function(distanceFromPlayer) {
+		return new ClientWeapon("Volcano", distanceFromPlayer, 21, 'rgba(255,0,0,1)');
+	}
+};
+*/
+
+module.exports = ClientWeapon;
+
+},{"../shared/Weapon":19}],7:[function(require,module,exports){
+'use strict';
+
+var GameObject = require('../shared/GameObject');
+
+class HealthBar extends GameObject {
+	constructor(position, size) {
+		super(position, size, 'rgba(0,215,100,1)');
+
+        this.outlineColor = 'rgba(80,80,80,1)';
+        this.halfLength = this.size/2;
+        this.width = 6;
+        this.percent = 100;
+    }
+
+    update(health) {
+        this.percent = health;
+    }
+
+    draw(ctx) {
+		ctx.transform(1, 0, 0, 1, this.position.x - this.halfLength, this.position.y);
+		ctx.fillStyle = this.outlineColor;
+        ctx.fillRect(0, 0, this.size, this.width);
+        ctx.fillStyle = this.color;
+		ctx.fillRect(0, 0, (this.size * this.percent) / 100, this.width);
+		ctx.strokeStyle = this.outlineColor;
+		ctx.lineWidth = 2;
+		ctx.strokeRect(0, 0, this.size, this.width);
+    }
+}
+
+module.exports = HealthBar;
+
+},{"../shared/GameObject":15}],8:[function(require,module,exports){
 'use strict';
 
 var Client = require('./Client');
 new Client().run();
 
-},{"./Client":1}],3:[function(require,module,exports){
+},{"./Client":1}],9:[function(require,module,exports){
 module.exports = {
     DEGREES_90: Math.PI/2,
     DEGREES_270: 3*Math.PI/2,
     DEGREES_360: 2*Math.PI,
-    
-    canvas: document.getElementById('canvas'),
+    WORLD_WIDTH: 4000,
+    WORLD_HEIGHT: 4000,
     
     areObjectsSame: function(o1, o2) {
         return JSON.stringify(o1) === JSON.stringify(o2);
     }
 };
 
-},{}],4:[function(require,module,exports){
+},{}],10:[function(require,module,exports){
 /**
  * Author: Kiran Sivakumar
 */
@@ -231,39 +665,7 @@ MouseState.buttonCodes = {
 
 module.exports = MouseState;
 
-},{}],5:[function(require,module,exports){
-/**
- * Author: Kiran Sivakumar
-*/
-
-'use strict';
-
-class Rectangle {
-	constructor(x = 0, y = 0, width = 0, height = 0) {
-		this.x = x;
-		this.y = y;
-		this.width = width;
-		this.height = height;
-	}
-	
-	set(x, y, width, height) {
-		this.x = x;
-		this.y = y;
-		this.width = width;
-		this.height = height;
-	}
-	
-	intersects(other) {
-		return	this.x < other.x + other.width &&
-				this.x + this.width > other.x &&
-				this.y < other.y + other.height &&
-				this.y + this.height > other.y;
-	}
-}
-
-module.exports = Rectangle;
-
-},{}],6:[function(require,module,exports){
+},{}],11:[function(require,module,exports){
 /** @namespace */
 var THREEx	= THREEx 		|| {};
 
@@ -348,7 +750,7 @@ THREEx.KeyboardState.prototype.pressed	= function(keyDesc)
 
 module.exports = THREEx.KeyboardState;
 
-},{}],7:[function(require,module,exports){
+},{}],12:[function(require,module,exports){
 /**
  * Author: Kiran Sivakumar
 */
@@ -420,314 +822,52 @@ class Vector2D {
 
 module.exports = Vector2D;
 
-},{}],8:[function(require,module,exports){
-'use strict';
-class SpatialHash{
-    constructor(range, cellSize){
-        //var getBounds = getBounds(range);
-        this.cellSize = cellSize;
-        if (range.width%cellSize !== 0 || range.height%cellSize !== 0)
-            throw "Exception: width and height must both be divisible by cell size";
-    
-        this._horizontalCells = range.width/cellSize;
-        this._verticalCells = range.height/cellSize;
-        this.hash = [];
-        this.range= range;
-
-        var i, j, a;
-        for (i = 0; i <= this._verticalCells-1; i++){
-            a = [];
-            for (j = 0; j <= this._horizontalCells-1; j++)
-                a.push([]);
-            this.hash.push(a);
-        }
-
-        this.itemCount = 0;
-        this.cellCount = this._horizontalCells * this._verticalCells;
-        this._id = -9e15; //max number of items
-    }
-
-    insert(item) {
-        if (!item.range)
-            throw "Exception: item has no range object";
-        var bounds = getBounds(item.range);
-        var hStart = Math.max(~~((bounds.left-this.range.x) / this.cellSize), 0);
-        var hEnd = Math.min(~~((bounds.right-this.range.x) / this.cellSize), this._horizontalCells-1);
-        var vStart = Math.max(~~((bounds.top-this.range.y) / this.cellSize), 0);
-        var vEnd = Math.min(~~((bounds.bottom-this.range.y) / this.cellSize), this._verticalCells-1);
-   
-        item.__b = {
-            hStart: hStart,
-            hEnd: hEnd,
-            vStart: vStart,
-            vEnd: vEnd,
-            id: this._id++
-        };
-
-        var i, j;
-        for (i = vStart; i <= vEnd; i++) {
-            for (j = hStart; j <= hEnd; j++)
-                this.hash[i][j].push(item);
-        }
-
-        if (this.itemCount++ >= 9e15)
-            throw "Exception: more than 9E15 (900 000 000 000 000) items";
-        else if (this._id > 9e15 - 1)
-            this._id = -9e15;
-    }
-
-    remove(item) {
-        if (!item.__b) return;
-        var hStart = item.__b.hStart;
-        var hEnd = item.__b.hEnd;
-        var vStart = item.__b.vStart;
-        var vEnd = item.__b.vEnd;
-
-        var i, j, k;
-        for (i = vStart; i <= vEnd; i++) {
-            for (j = hStart; j <= hEnd; j++) {
-                k = this.hash[i][j].indexOf(item);
-                if (k !== -1) this.hash[i][j].splice(k, 1);
-            }
-        }
-        if (!(delete item.__b)) item.__b = undefined;
-        this.itemCount--;
-    }
-
-    removeAll(){
-        this.hash = [];
-        var i, j, a;
-        for (i = 0; i <= this._verticalCells-1; i++){
-            a = [];
-            for (j = 0; j <= this._horizontalCells-1; j++)
-                a.push([]);
-            this.hash.push(a);
-        }
-        this.itemCount = 0;
-    }
-
-    update(item) {
-        this.remove(item);
-        this.insert(item);
-    }
-
-    __srch(range, selector, callback, returnOnFirst) {
-        var bounds = getBounds(range),
-            cellSize = this.cellSize;
-
-        // range might be larger than the hash's size itself
-        var hStart = Math.max(~~((bounds.left-this.range.x) / this.cellSize), 0);
-        var hEnd = Math.min(~~((bounds.right-this.range.x) / this.cellSize), this._horizontalCells-1);
-        var vStart = Math.max(~~((bounds.top-this.range.y) / this.cellSize), 0);
-        var vEnd = Math.min(~~((bounds.bottom-this.range.y) / this.cellSize), this._verticalCells-1);
-   
-
-        var i , j, k, l, m, o = [], p = [];
-        for (i = vStart; i <= vEnd; i++) {
-            for (j = hStart; j <= hEnd; j++) {
-                k = this.hash[i][j];
-                l = k.length;
-                for (m = 0; m < l; m++)
-                    if (intersects(k[m].range, range) && p.indexOf(k[m].__b.id) === -1) {
-                        p.push(k[m].__b.id);
-                        if (selector) if (!selector(k[m])) continue;
-                        if (callback) callback(k[m]);
-                        if (returnOnFirst) return true;
-                        o.push(k[m]);
-                    }
-            }
-        }
-        if (returnOnFirst) return false;
-        return o;
-    };
-
-    any(range) {
-        return this.__srch(range, null, null, true);
-    }
-
-    query(range, selector) {
-        return this.__srch(range, selector, null, false);
-    }
-
-    find(range, callback) {
-        return this.__srch(range, null, callback, false);
-    }
-
-    // toString(){
-    //     var str=" ";
-    //     var i, j;
-    //     for (i = 0; i <= this._horizontalCells-1; i++) 
-    //         str+=" "+i.toString()+" ";
-    //     str+="\n";
-    //     for (j = 0; j <= this._verticalCells-1; j++){
-    //         str+=j.toString();
-    //         for (i=0; i<=this._horizontalCell-1; i++){
-    //             if (this.hash[i][j]===[]) str+=" -- ";
-    //             var z=0;
-    //             for (;z<this.hash[i][j].length;z++)
-    //                 str+="O,";
-    //         }    
-    //         str+="\n"
-    //     }
-    //     return str;
-    // }
-}
-
-
-
-function intersects(a, b) {
-    return a.x <= b.x + b.width
-        && a.x + a.width >= b.x
-        && a.y <= b.y + b.height
-        && a.y + a.height >= b.y;
-}
-
-function getBounds(range) {
-    return {
-        left: range.x,
-        right: range.x + range.width,
-        top: range.y,
-        bottom: range.y + range.height
-    };
-}
-
-module.exports = SpatialHash;
-
-
-},{}],9:[function(require,module,exports){
+},{}],13:[function(require,module,exports){
 'use strict';
 
 var GameObject = require('./GameObject');
-var Rectangle = require('../lib/Rectangle');
-var Vector2D = require('../lib/Vector2D');
-var Globals = require('../lib/Globals');
 
 class Bullet extends GameObject {
-	constructor(velocity, position, radius = 7, damage = 40, health = 1, timeToExpire = 3000, color = "black", outlineColor = 'rgba(80,80,80,1)') {
-		super(velocity, position, radius*2, color);
+	constructor(position, radius = 7, health = 1, color = "black", outlineColor = 'rgba(80,80,80,1)') {
+		super(position, radius*2, color);
 		this.radius = radius;
 		this.health = health;
-		this.damage = damage;
-		this.expiryTime = Date.now() + timeToExpire;
 		this.outlineColor = outlineColor;
-	}
-	
-	update(deltaTime) {
-		let adjustedBulletVelocity = new Vector2D().copy(this.velocity).mul(deltaTime);
-		this.position.add(adjustedBulletVelocity);
-		this.updateRange();
-	}
-	
-	draw(ctx, transformToCameraCoords) {
-		transformToCameraCoords();
-		ctx.beginPath();
-		ctx.arc(this.position.x, this.position.y, this.radius, 0, Globals.DEGREES_360);
-		ctx.fillStyle = this.color;
-		ctx.fill();
-		ctx.strokeStyle = this.outlineColor;
-		ctx.lineWidth = 2;
-		ctx.stroke();
 	}
 }
 
 module.exports = Bullet;
 
-},{"../lib/Globals":3,"../lib/Rectangle":5,"../lib/Vector2D":7,"./GameObject":11}],10:[function(require,module,exports){
+},{"./GameObject":15}],14:[function(require,module,exports){
 'use strict';
 
 var GameObject = require('./GameObject');
-var HealthBar = require('./HealthBar');
-var Rectangle = require('../lib/Rectangle');
-var Vector2D = require('../lib/Vector2D');
 var Globals = require('../lib/Globals');
 
 class Collectible extends GameObject {
-	constructor(position, health = 100, damage = 10, speed = 10) {
-		super(new Vector2D(0, 0), position, 20, 'rgba(255,192,0,1)');
+	constructor(position, health = 100) {
+		super(position, 20, 'rgba(255,192,0,1)');
 		this.orientation = Math.random() * Globals.DEGREES_360;
-		this.movementAngle = this.orientation;
-		this.movementSpread = Math.PI/16;
-		this.rotationSpeed = 1;
 		this.health = health;
-		this.isDamaged = false;
-		this.damage = damage;
-		this.speed = speed;
 		this.outlineColor = 'rgba(80,80,80,1)';
-
-		this.healthBar = new HealthBar(new Vector2D(0, this.size + 10), this.size * 1.5);
-	}
-	
-	update(deltaTime) {
-		this.movementAngle = this.movementAngle + (Math.random() * this.movementSpread - this.movementSpread/2);
-		if (this.movementAngle > Globals.DEGREES_360) {
-			this.movementAngle -= Globals.DEGREES_360;
-		}
-		else if (this.movementAngle < 0) {
-			this.movementAngle += Globals.DEGREES_360
-		}
-		this.velocity.set(Math.cos(this.movementAngle), Math.sin(this.movementAngle)).setLength(this.speed);
-		let adjustedVelocity = new Vector2D().copy(this.velocity).mul(deltaTime);
-		this.position.add(adjustedVelocity);
-		this.orientation += this.rotationSpeed * deltaTime;
-
-		this.healthBar.update(this.health);
-
-		this.updateRange();
-	}
-	
-	draw(ctx, transformToCameraCoords) {
-		transformToCameraCoords();
-		ctx.transform(1, 0, 0, 1, this.position.x, this.position.y);
-		ctx.rotate(this.orientation);
-		ctx.transform(1, 0, 0, 1, -this.size/2, -this.size/2);
-		ctx.fillStyle = this.color;
-		ctx.fillRect(0, 0, this.size, this.size);
-		
-		ctx.strokeStyle = this.outlineColor;
-		ctx.lineWidth = 3;
-		ctx.strokeRect(0, 0, this.size, this.size);
-
-		if (this.isDamaged) {
-			transformToCameraCoords();
-			ctx.transform(1, 0, 0, 1, this.position.x, this.position.y);
-			this.healthBar.draw(ctx);
-		}
-	}
-
-	takeDamage(dmgAmt) {
-		this.isDamaged = true;
-		super.takeDamage(dmgAmt);
 	}
 }
 
 module.exports = Collectible;
 
-},{"../lib/Globals":3,"../lib/Rectangle":5,"../lib/Vector2D":7,"./GameObject":11,"./HealthBar":13}],11:[function(require,module,exports){
+},{"../lib/Globals":9,"./GameObject":15}],15:[function(require,module,exports){
 'use strict';
-
-var Rectangle = require('../lib/Rectangle');
 
 /* Abstract */
 class GameObject {
-	constructor(velocity, position, size, color) {
+	constructor(position, size, color) {
 		if (this.constructor === GameObject) {
 			throw new Error("Attempt to instantiate abstract class GameObject.");
 		}
 		
-		this.velocity = velocity;
 		this.position = position;
 		this.size = size;
 		this.color = color;
-
-		// spatialhash-2d variables begin
-		this.range = {
-			x: this.position.x-this.size/2, //new spatial-hash
-			y: this.position.y-this.size/2, //new spatial-hash
-			width: this.size, //new spatial-hash
-			height: this.size //new spatial-hash
-		};
-		this.__b = undefined;
-		// spatialhash-2d variables end
 	}
 	
 	update(deltaTime) {
@@ -737,333 +877,40 @@ class GameObject {
 	draw(ctx, transformToCameraCoords) {
 		throw new Error("Abstract method called: GameObject.prototype.draw().");
 	}
-	
-	getHitBox() {
-		return new Rectangle(
-			this.position.x - this.size/2,
-			this.position.y - this.size/2,
-			this.size,
-			this.size
-		);
-	}
-
-	updateRange() {
-		this.range.x = this.position.x-this.size/2; //new spatial-hash
-		this.range.y = this.position.y-this.size/2; //new spatial-hash
-	}
-
-	takeDamage(dmgAmt) {
-		if (this.hasOwnProperty("health")) {
-			this.health -= dmgAmt;
-		}
-	}
-
-	isExpired() {
-		if (this.hasOwnProperty("expiryTime") && Date.now() >= this.expiryTime) {
-			return true;
-		}
-		
-		return false;
-	}
 }
 
 module.exports = GameObject;
 
-},{"../lib/Rectangle":5}],12:[function(require,module,exports){
+},{}],16:[function(require,module,exports){
 'use strict';
-
-var Player = require('./Player');
-var Collectible = require('./Collectible');
-var Vector2D = require('../lib/Vector2D');
-var SpatialHash = require('spatial-hash'); //new spatial-hash
-var Globals = require('../lib/Globals');
 
 class GameState {	
 	constructor(worldWidth, worldHeight) {
 		this.worldWidth = worldWidth;
 		this.worldHeight = worldHeight;
-		
-		this.player = new Player(
-			new Vector2D(0, 0),
-			new Vector2D(this.worldWidth/2, this.worldHeight/2),
-			'rgba(0,180,255,1)'
-		);
-		this.bullets = [];
-		this.collectibles = [];
-		this.spatialHash = new SpatialHash( { x: 0, y: 0, width: this.worldWidth, height: this.worldHeight }, 80); //new spatial-hash
-		
-		for (let i = 0; i < 100; i++) {
-			let cX = Math.floor(Math.random() * worldWidth);
-			let cY = Math.floor(Math.random() * worldHeight);
-			let collectible = new Collectible(new Vector2D(cX, cY));
-			this.collectibles.push(collectible);
-			this.spatialHash.insert(collectible);
-		}
-
-		this.spatialHash.insert(this.player);
-
-		document.getElementById("grid").draggable = false;
-		this.grid = document.getElementById("grid");
-		
-		this.prevTime = Date.now();
-	}
-	
-	update(input) {		
-		let currTime = Date.now();
-		let deltaTime = (currTime - this.prevTime) / 1000;
-		this.prevTime = currTime;
-		
-		if (this.player.health > 0) {
-			this.updatePlayer(input, deltaTime);
-		}
-		this.updateBullets(input, deltaTime);
-		this.updateCollectibles(deltaTime);
-
-		this.detectCollisions();
-
-		return this.player.health > 0;
-	}
-	
-	draw(ctx) {
-		let playerPosition = this.player.position;
-		let transformToCameraCoords = function() {
-			ctx.setTransform(1, 0, 0, 1, 
-				Globals.canvas.width/2 - playerPosition.x, 
-				Globals.canvas.height/2 - playerPosition.y
-			);
-		};
-
-		this.drawBackground(ctx, transformToCameraCoords);
-		if (this.player.health > 0) {	
-			this.player.draw(
-				ctx,
-				function() {
-					ctx.setTransform(1, 0, 0, 1, Globals.canvas.width/2, Globals.canvas.height/2);
-				}
-			);
-		}
-		this.bullets.map(function(bullet) { bullet.draw(ctx, transformToCameraCoords); });
-		this.collectibles.map(function(collectible) { collectible.draw(ctx, transformToCameraCoords); });
-	}
-	
-	updatePlayer(input, deltaTime) {
-		let preUpdateBuckets = this.findBuckets(this.player);
-		let adjustedPlayerVelocity = this.player.update(
-			deltaTime, 
-			input.keysPressed, 
-			input.mousePosition
-		);
-		if (!this.isWithinGameWorld(this.player.position)) {
-			this.player.position.sub(adjustedPlayerVelocity);
-			this.player.velocity.set(0, 0);
-			this.player.updateRange();
-		}
-		let postUpdateBuckets = this.findBuckets(this.player);
-		if (this.areBucketsDifferent(preUpdateBuckets, postUpdateBuckets)) {
-			this.spatialHash.update(this.player);
-		}
-
-		/* DEBUG
-		let hash = this.spatialHash.hashes;
-		let preHash = '';
-		for (let i = 0; i < Math.floor(this.worldWidth/this.spatialHash.bucketSize) + 1; i++) {
-			for (let j = 0; j < Math.floor(this.worldHeight/this.spatialHash.bucketSize) + 1; j++) {
-				if (hash[i.toString()][j.toString()].length > 0) {
-					preHash += '(' + i + ',' + j + ') ';
-				}
-			}
-		}
-
-		this.spatialHash.update(this.player);
-		
-		let postHash = '';
-		for (let i = 0; i < Math.floor(this.worldWidth/this.spatialHash.bucketSize) + 1; i++) {
-			for (let j = 0; j < Math.floor(this.worldHeight/this.spatialHash.bucketSize) + 1; j++) {
-				if (hash[i.toString()][j.toString()].length > 0) {
-					postHash += '(' + i + ',' + j + ') ';
-				}
-			}
-		}
-
-		console.log(this.player.position.x + ',' + this.player.position.y);
-		console.log(preUpdateBuckets.bucketsX[0] + ',' + preUpdateBuckets.bucketsY[0] + '  ' + preUpdateBuckets.bucketsX[1] + ',' + preUpdateBuckets.bucketsY[1]);
-		console.log(postUpdateBuckets.bucketsX[0] + ',' + postUpdateBuckets.bucketsY[0] + '  ' + postUpdateBuckets.bucketsX[1] + ',' + postUpdateBuckets.bucketsY[1]);
-		console.log(preHash);
-		console.log(postHash);
-		console.log("");
-		*/
-	}
-
-	updateGameObjects(gameObjects, deltaTime) {
-		for (let i = 0; i < gameObjects.length; i++) {
-			let gameObject = gameObjects[i];
-			if (this.isWithinGameWorld(gameObject.position) && !gameObject.isExpired()) {
-				let preUpdateBuckets = this.findBuckets(gameObject);
-				gameObject.update(deltaTime);
-				let postUpdateBuckets = this.findBuckets(gameObject);
-				if (this.areBucketsDifferent(preUpdateBuckets, postUpdateBuckets)) {
-					this.spatialHash.update(gameObject);
-				}
-			}
-			else {
-				gameObjects.splice(i, 1);
-				this.spatialHash.remove(gameObject);
-				i--;
-			}
-		}
-	}
-	
-	updateBullets(input, deltaTime) {
-		if (this.player.health > 0) {
-			if (input.isMouseLeftButtonDown) {
-				let newBullet = this.player.fireWeapon();
-				if (newBullet !== null) {
-					this.bullets.push(newBullet);
-					this.spatialHash.insert(newBullet);
-				}
-			}
-		}
-		
-		this.updateGameObjects(this.bullets, deltaTime);
-	}
-	
-	updateCollectibles(deltaTime) {
-		this.updateGameObjects(this.collectibles, deltaTime);
-	}
-	
-	detectCollisions() {
-		/* Spatial hash approach */
-		for (let i = 0; i < this.bullets.length; i++) {
-			let bullet = this.bullets[i];
-			let intersectList = this.spatialHash.query(bullet.range, function(item) { return item.constructor.name === 'Collectible'; });
-			if (intersectList.length > 0) {
-				let j = this.collectibles.findIndex(function(c) { return Globals.areObjectsSame(intersectList[0], c); });
-				let collectible = this.collectibles[j];
-				collectible.takeDamage(bullet.damage);
-				if (collectible.health <= 0) {
-					this.collectibles.splice(j, 1);
-					this.spatialHash.remove(collectible);
-				}
-				else {
-					this.bullets.splice(i, 1);
-					this.spatialHash.remove(bullet);
-					i--;
-				}
-			}
-		}
-		if (this.player.health > 0) {
-			let intersectList = this.spatialHash.query(this.player.range, function(item) { return item.constructor.name === 'Collectible'; });
-			if (intersectList.length > 0) {
-				let j = this.collectibles.findIndex(function(c) { return Globals.areObjectsSame(intersectList[0], c); });
-				let collectible = this.collectibles[j];
-
-				collectible.takeDamage(this.player.damage);
-				if (collectible.health <= 0) {
-					this.collectibles.splice(j, 1);
-					this.spatialHash.remove(collectible);
-				}
-
-				this.player.takeDamage(collectible.damage);
-				//console.log(this.player.health);
-				if (this.player.health <= 0) {
-					this.spatialHash.remove(this.player);
-				}
-			}
-		}
-		/**/
-
-		/* Brute force approach */ /*
-		for (let i = 0; i < this.bullets.length; i++) {
-			let bulletHitBox = this.bullets[i].getHitBox();
-			for (let j = 0; j < this.collectibles.length; j++) {
-				let collectibleHitBox = this.collectibles[j].getHitBox();
-				if (bulletHitBox.intersects(collectibleHitBox)) {
-					this.collectibles.splice(j, 1);
-					j--;
-				}
-			}
-		}
-		/**/
-	}
-
-	drawBackground(ctx, transformToCameraCoords) {
-		transformToCameraCoords();
-		ctx.rect(0, 0, this.worldWidth, this.worldHeight);
-		ctx.fillStyle = ctx.createPattern(this.grid, "repeat");
-		ctx.fill();
-	}
-	
-	isWithinGameWorld(position) {
-		return 	position.x > 0 && position.x < this.worldWidth &&
-				position.y > 0 && position.y < this.worldHeight;
-	}
-
-	findBuckets(gameObject) {
-		let bucketSize = this.spatialHash.cellSize; //new spatial-hash
-		let positionX = gameObject.position.x;
-		let positionY = gameObject.position.y;
-		let halfWidth = gameObject.range.width/2; //new spatial-hash
-		let halfHeight = gameObject.range.height/2; //new spatial-hash
-
-		let firstBucketX = Math.floor((positionX - halfWidth) / bucketSize);
-		let lastBucketX = Math.floor((positionX + halfWidth) / bucketSize);
-		let firstBucketY = Math.floor((positionY - halfHeight) / bucketSize);
-		let lastBucketY = Math.floor((positionY + halfHeight) / bucketSize);
-
-		return { bucketsX: [ firstBucketX, lastBucketX ], bucketsY: [ firstBucketY, lastBucketY ] };
-	}
-
-	areBucketsDifferent(b1, b2) {
-		return 	b1.bucketsX[0] !== b2.bucketsX[0] ||
-				b1.bucketsX[1] !== b2.bucketsX[1] ||
-				b1.bucketsY[0] !== b2.bucketsY[0] ||
-				b1.bucketsY[1] !== b2.bucketsY[1];
 	}
 }
 
 module.exports = GameState;
 
-},{"../lib/Globals":3,"../lib/Vector2D":7,"./Collectible":10,"./Player":14,"spatial-hash":8}],13:[function(require,module,exports){
+},{}],17:[function(require,module,exports){
 'use strict';
 
-var GameObject = require('./GameObject');
-var Rectangle = require('../lib/Rectangle');
-var Vector2D = require('../lib/Vector2D');
-
-class HealthBar extends GameObject {
-	constructor(position, size) {
-		super(new Vector2D(0, 0), position, size, 'rgba(0,215,100,1)');
-        this.outlineColor = 'rgba(80,80,80,1)';
-        this.halfLength = this.size/2;
-        this.width = 6;
-        this.percent = 100;
-    }
-
-    update(health) {
-        this.percent = health;
-    }
-
-    draw(ctx) {
-		ctx.transform(1, 0, 0, 1, this.position.x - this.halfLength, this.position.y);
-		ctx.fillStyle = this.outlineColor;
-        ctx.fillRect(0, 0, this.size, this.width);
-        ctx.fillStyle = this.color;
-		ctx.fillRect(0, 0, (this.size * this.percent) / 100, this.width);
-		ctx.strokeStyle = this.outlineColor;
-		ctx.lineWidth = 2;
-		ctx.strokeRect(0, 0, this.size, this.width);
+class InputUpdate {
+    constructor(sequenceNumber, keysPressed, mouseDirection, isMouseLeftButtonDown) {
+        this.sequenceNumber = sequenceNumber;
+        this.keysPressed = keysPressed;
+        this.mouseDirection = mouseDirection;
+        this.isMouseLeftButtonDown = isMouseLeftButtonDown;
     }
 }
 
-module.exports = HealthBar;
+module.exports = InputUpdate;
 
-},{"../lib/Rectangle":5,"../lib/Vector2D":7,"./GameObject":11}],14:[function(require,module,exports){
+},{}],18:[function(require,module,exports){
 'use strict';
 
 var GameObject = require('./GameObject');
-var WeaponFactory = require('./Weapon').WeaponFactory;
-var HealthBar = require('./HealthBar');
-var Rectangle = require('../lib/Rectangle');
 var Vector2D = require('../lib/Vector2D');
 var Globals = require('../lib/Globals');
 
@@ -1071,22 +918,12 @@ const DIAG_ACCEL_FACTOR = Math.cos(Math.PI/4);
 
 class Player extends GameObject {
 	constructor(velocity, position, color) {
-		super(velocity, position, 40, color);
+		super(position, 40, color);
 
-		this.outlineColor = 'rgba(80,80,80,1)';		
-		this.acceleration = 7;
-		this.deceleration = 3;
-		this.maxSpeed = 225;
-		this.minSpeed = 5;
-		this.radius = this.size/2;
-		this.orientation = 0;
-		this.health = 100;
-		this.damage = 100;
-		this.weapon = WeaponFactory.makePlebPistol(this.radius);
-		this.healthBar = new HealthBar(new Vector2D(0, this.radius + 12), this.radius * 2.5);
+		this.velocity = velocity;
 	}
 	
-	update(deltaTime, keysPressed, mousePosition) {
+	update(deltaTime, keysPressed, mouseDirection) {
 		let acceleration = new Vector2D(0, 0);
 		if (keysPressed.numDirKeysPressed === 2) {
 			let axisAcceleration = this.acceleration * DIAG_ACCEL_FACTOR;
@@ -1136,75 +973,9 @@ class Player extends GameObject {
 		let adjustedPlayerVelocity = new Vector2D().copy(this.velocity).mul(deltaTime);
 		this.position.add(adjustedPlayerVelocity);
 		
-		//let direction = new Vector2D().copy(mousePosition).sub(this.position);
-		let direction = new Vector2D().copy(mousePosition).sub(new Vector2D(Globals.canvas.width/2, Globals.canvas.height/2));
-		this.orientation = this.convertToOrientation(direction);
-
-		if ('1' in keysPressed) {
-			if (this.weapon.name !== "Pleb Pistol") {
-				this.weapon = WeaponFactory.makePlebPistol(this.radius);
-			}
-		}
-		else if ('2' in keysPressed) {
-			if (this.weapon.name !== "Flame Thrower") {
-				this.weapon = WeaponFactory.makeFlameThrower(this.radius);
-			}
-		}
-		else if ('3' in keysPressed) {
-			if (this.weapon.name !== "Volcano") {
-				this.weapon = WeaponFactory.makeVolcano(this.radius);
-			}
-		}
-
-		this.healthBar.update(this.health);
-
-		this.updateRange();
+		this.orientation = this.convertToOrientation(mouseDirection);
 		
 		return adjustedPlayerVelocity;
-	}
-	
-	draw(ctx, transformToCameraCoords) {
-		transformToCameraCoords();
-		ctx.beginPath();
-		ctx.arc(0, 0, this.radius, 0, 2*Math.PI);
-		ctx.fillStyle = this.color;
-		ctx.fill();
-
-		transformToCameraCoords();
-		ctx.rotate(this.orientation);
-		this.weapon.draw(ctx);
-
-		transformToCameraCoords();
-		this.healthBar.draw(ctx);
-		
-		transformToCameraCoords();
-		ctx.beginPath();
-		ctx.arc(0, 0, this.radius, 0, 2*Math.PI);
-		ctx.strokeStyle = this.outlineColor;
-		ctx.lineWidth = 3;
-		ctx.stroke();
-
-		/* Without camera
-		ctx.setTransform(1, 0, 0, 1, 0, 0);
-		ctx.beginPath();
-		ctx.arc(this.position.x, this.position.y, this.radius, 0, 2*Math.PI);
-		ctx.fillStyle = this.color;
-		ctx.fill();
-
-		ctx.setTransform(1, 0, 0, 1, this.position.x, this.position.y);
-		ctx.rotate(this.orientation);
-		this.weapon.draw(ctx);
-
-		ctx.setTransform(1, 0, 0, 1, this.position.x, this.position.y);
-		this.healthBar.draw(ctx);
-		
-		ctx.setTransform(1, 0, 0, 1, 0, 0);
-		ctx.beginPath();
-		ctx.arc(this.position.x, this.position.y, this.radius, 0, 2*Math.PI);
-		ctx.strokeStyle = this.outlineColor;
-		ctx.lineWidth = 3;
-		ctx.stroke();
-		*/
 	}
 	
 	convertToOrientation(direction) {
@@ -1218,122 +989,25 @@ class Player extends GameObject {
 			return Globals.DEGREES_270;
 		}
 	}
-	
-	fireWeapon() {		
-		return this.weapon.fire(this.orientation, this.position);
-	}
 }
 
 module.exports = Player;
 
-},{"../lib/Globals":3,"../lib/Rectangle":5,"../lib/Vector2D":7,"./GameObject":11,"./HealthBar":13,"./Weapon":15}],15:[function(require,module,exports){
+},{"../lib/Globals":9,"../lib/Vector2D":12,"./GameObject":15}],19:[function(require,module,exports){
 'use strict';
 
 var GameObject = require('./GameObject');
-var Bullet = require('./Bullet');
 var Vector2D = require('../lib/Vector2D');
 
 class Weapon extends GameObject {
-	constructor(
-		name, 
-		distanceFromPlayer, 
-		size, 
-		color, 
-		bulletDamage, 
-		bulletHealth, 
-		bulletSpeed, 
-		fireRate, 
-		bulletSpread, 
-		bulletRadius, 
-		bulletTimeToExpire, 
-		bulletColor, 
-		bulletOutlineColor
-	) {
-		super(new Vector2D(0, 0), new Vector2D(distanceFromPlayer, -size/2), size, color);
+	constructor(name, distanceFromPlayer, size, color, outlineColor = 'rgba(80,80,80,1)') {
+		super(new Vector2D(distanceFromPlayer, -size/2), size, color);
 		this.name = name;
 		this.distanceFromPlayer = distanceFromPlayer;
-		this.outlineColor = 'rgba(80,80,80,1)';
-		this.bulletDamage = bulletDamage;
-		this.bulletHealth = bulletHealth;
-		this.bulletSpeed = bulletSpeed;
-		this.msPerBullet = 1000/fireRate;
-		this.bulletSpread = bulletSpread * Math.PI/180;
-		this.bulletRadius = bulletRadius;
-		this.bulletTimeToExpire = bulletTimeToExpire;
-		this.bulletColor = bulletColor;
-		this.bulletOutlineColor = bulletOutlineColor;
-		
-		this.prevFireTime = 0;
-	}
-	
-	fire(playerOrientation, playerPosition) {
-		let currTime = Date.now();
-		if (currTime - this.prevFireTime > this.msPerBullet) {
-			this.prevFireTime = currTime;
-			let bulletDirection = this.generateBulletDirection(playerOrientation);
-			let bulletVelocity = new Vector2D().copy(bulletDirection).setLength(this.distanceFromPlayer + this.size);
-			let bulletPosition = new Vector2D().copy(playerPosition).add(bulletVelocity);
-			bulletVelocity.setLength(this.bulletSpeed);
-			return new Bullet(
-				bulletVelocity,
-				bulletPosition,
-				this.bulletRadius,
-				this.bulletDamage,
-				this.bulletHealth,
-				this.bulletTimeToExpire,
-				this.bulletColor,
-				this.bulletOutlineColor
-			);
-		}
-		else {
-			return null;
-		}
-	}
-	
-	/* never gets called *
-	update(deltaTime) {}
-	*/
-	
-	draw(ctx) {
-		ctx.transform(1, 0, 0, 1, this.position.x, this.position.y);
-		ctx.fillStyle = this.color;
-		ctx.fillRect(0, 0, this.size, this.size);
-		
-		ctx.strokeStyle = this.outlineColor;
-		ctx.lineWidth = 3;
-		ctx.strokeRect(0, 0, this.size, this.size);
-	}
-	
-	getHitBox() {
-		throw new Error("Weapon.prototype.getHitBox() not implemented yet.");
-	}
-	
-	generateBulletDirection(angle) {
-		angle = angle + (Math.random() * this.bulletSpread - this.bulletSpread/2);
-		return new Vector2D(Math.cos(angle), Math.sin(angle));
+		this.outlineColor = outlineColor;
 	}
 }
 
-// dark grey: 'rgba(80,80,80,1)'
-var WeaponFactory = {
-						//name				dist		  		size	color					damage	health	speed	rate	spread	rad	exp		bullet color			bullet outline color
-	makePlebPistol: function(distanceFromPlayer) {
-		return new Weapon("Pleb Pistol", 	distanceFromPlayer, 19, 	'rgba(255,0,128,1)', 	40, 	1, 		350, 	3, 		12, 	8, 	3000, 	'rgba(255,128,0,1)', 	'rgba(80,80,80,1)');
-	},
-	makeFlameThrower: function(distanceFromPlayer) {
-		return new Weapon("Flame Thrower", 	distanceFromPlayer, 20, 	'rgba(255,140,0,1)', 	3, 		2, 		600, 	1000,	7, 		10, 440, 	'rgba(255,140,0,1)', 	'rgba(255,90,0,1)');
-	},
-	makeVolcano: function(distanceFromPlayer) {
-		return new Weapon("Volcano", 		distanceFromPlayer, 21, 	'rgba(255,0,0,1)', 		4, 		1, 		150, 	1000, 	60, 	10, 2000, 	'rgba(255,85,0,1)', 	'rgba(255,0,0,1)');
-	}
-};
+module.exports = Weapon;
 
-module.exports = { WeaponFactory: WeaponFactory };
-
-/*
-'rgba(255,0,80,1)' rasberry
-'rgba(255,85,0,1)' orange
-'rgba(130,100,80,1)' mountain
-*/
-
-},{"../lib/Vector2D":7,"./Bullet":9,"./GameObject":11}]},{},[2]);
+},{"../lib/Vector2D":12,"./GameObject":15}]},{},[8]);

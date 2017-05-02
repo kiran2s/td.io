@@ -1,9 +1,6 @@
 'use strict';
 
 var GameObject = require('./GameObject');
-var WeaponFactory = require('./Weapon').WeaponFactory;
-var HealthBar = require('./HealthBar');
-var Rectangle = require('../lib/Rectangle');
 var Vector2D = require('../lib/Vector2D');
 var Globals = require('../lib/Globals');
 
@@ -11,22 +8,12 @@ const DIAG_ACCEL_FACTOR = Math.cos(Math.PI/4);
 
 class Player extends GameObject {
 	constructor(velocity, position, color) {
-		super(velocity, position, 40, color);
+		super(position, 40, color);
 
-		this.outlineColor = 'rgba(80,80,80,1)';		
-		this.acceleration = 7;
-		this.deceleration = 3;
-		this.maxSpeed = 225;
-		this.minSpeed = 5;
-		this.radius = this.size/2;
-		this.orientation = 0;
-		this.health = 100;
-		this.damage = 100;
-		this.weapon = WeaponFactory.makePlebPistol(this.radius);
-		this.healthBar = new HealthBar(new Vector2D(0, this.radius + 12), this.radius * 2.5);
+		this.velocity = velocity;
 	}
 	
-	update(deltaTime, keysPressed, mousePosition) {
+	update(deltaTime, keysPressed, mouseDirection) {
 		let acceleration = new Vector2D(0, 0);
 		if (keysPressed.numDirKeysPressed === 2) {
 			let axisAcceleration = this.acceleration * DIAG_ACCEL_FACTOR;
@@ -76,75 +63,9 @@ class Player extends GameObject {
 		let adjustedPlayerVelocity = new Vector2D().copy(this.velocity).mul(deltaTime);
 		this.position.add(adjustedPlayerVelocity);
 		
-		//let direction = new Vector2D().copy(mousePosition).sub(this.position);
-		let direction = new Vector2D().copy(mousePosition).sub(new Vector2D(Globals.canvas.width/2, Globals.canvas.height/2));
-		this.orientation = this.convertToOrientation(direction);
-
-		if ('1' in keysPressed) {
-			if (this.weapon.name !== "Pleb Pistol") {
-				this.weapon = WeaponFactory.makePlebPistol(this.radius);
-			}
-		}
-		else if ('2' in keysPressed) {
-			if (this.weapon.name !== "Flame Thrower") {
-				this.weapon = WeaponFactory.makeFlameThrower(this.radius);
-			}
-		}
-		else if ('3' in keysPressed) {
-			if (this.weapon.name !== "Volcano") {
-				this.weapon = WeaponFactory.makeVolcano(this.radius);
-			}
-		}
-
-		this.healthBar.update(this.health);
-
-		this.updateRange();
+		this.orientation = this.convertToOrientation(mouseDirection);
 		
 		return adjustedPlayerVelocity;
-	}
-	
-	draw(ctx, transformToCameraCoords) {
-		transformToCameraCoords();
-		ctx.beginPath();
-		ctx.arc(0, 0, this.radius, 0, 2*Math.PI);
-		ctx.fillStyle = this.color;
-		ctx.fill();
-
-		transformToCameraCoords();
-		ctx.rotate(this.orientation);
-		this.weapon.draw(ctx);
-
-		transformToCameraCoords();
-		this.healthBar.draw(ctx);
-		
-		transformToCameraCoords();
-		ctx.beginPath();
-		ctx.arc(0, 0, this.radius, 0, 2*Math.PI);
-		ctx.strokeStyle = this.outlineColor;
-		ctx.lineWidth = 3;
-		ctx.stroke();
-
-		/* Without camera
-		ctx.setTransform(1, 0, 0, 1, 0, 0);
-		ctx.beginPath();
-		ctx.arc(this.position.x, this.position.y, this.radius, 0, 2*Math.PI);
-		ctx.fillStyle = this.color;
-		ctx.fill();
-
-		ctx.setTransform(1, 0, 0, 1, this.position.x, this.position.y);
-		ctx.rotate(this.orientation);
-		this.weapon.draw(ctx);
-
-		ctx.setTransform(1, 0, 0, 1, this.position.x, this.position.y);
-		this.healthBar.draw(ctx);
-		
-		ctx.setTransform(1, 0, 0, 1, 0, 0);
-		ctx.beginPath();
-		ctx.arc(this.position.x, this.position.y, this.radius, 0, 2*Math.PI);
-		ctx.strokeStyle = this.outlineColor;
-		ctx.lineWidth = 3;
-		ctx.stroke();
-		*/
 	}
 	
 	convertToOrientation(direction) {
@@ -157,10 +78,6 @@ class Player extends GameObject {
 		else {
 			return Globals.DEGREES_270;
 		}
-	}
-	
-	fireWeapon() {		
-		return this.weapon.fire(this.orientation, this.position);
 	}
 }
 
