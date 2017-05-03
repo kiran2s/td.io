@@ -15,8 +15,12 @@ var frameCount = 0;
 var frameRate = 0;
 
 var updateCount = 0;
-var accumTime = 0;
+var updateAccumTime = 0;
 var timePerUpdate = 0;
+
+var drawCount = 0;
+var drawAccumTime = 0;
+var timePerDraw = 0;
 
 class Client {
 	constructor() {
@@ -139,16 +143,18 @@ class Client {
 		}
 		*/
 
-		accumTime += Date.now() - currTime;
+		updateAccumTime += Date.now() - currTime;
 		updateCount++;
 		if (updateCount >= 100) {
-			timePerUpdate = accumTime / 100.0;
+			timePerUpdate = updateAccumTime / 100.0;
 			updateCount = 0;
-			accumTime = 0;
+			updateAccumTime = 0;
 		}
 	}
 	
 	draw() {
+		let drawBeginTime = Date.now();
+
 		this.ctx.setTransform(1, 0, 0, 1, 0, 0);
 		this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
 		
@@ -184,6 +190,15 @@ class Client {
 		this.ctx.fillStyle = "black";
 		this.ctx.fillText("Frame rate: " + frameRate, 20, 30);
 		this.ctx.fillText("Update time: " + timePerUpdate + "ms", 20, 50);
+		this.ctx.fillText("Draw time: " + timePerDraw + "ms", 20, 70);
+
+		drawAccumTime += Date.now() - drawBeginTime;
+		drawCount++;
+		if (drawCount >= 100) {
+			timePerDraw = drawAccumTime / 100.0;
+			drawCount = 0;
+			drawAccumTime = 0;
+		}
 
 		window.requestAnimationFrame(this.draw.bind(this));
 	}
