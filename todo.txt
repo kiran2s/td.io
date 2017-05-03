@@ -1,8 +1,16 @@
 - Review code
 - Correct deltaTime functionality
-	- server maintains last few input update times for all clients
+	- server calculates deltaTime for each inputUpdate
+	- client sends server deltaTime
 - Improve performance
 	- better data structure for holding updates
+	- entity interpolation
+		- compare performance with and without
+		- interpolate in physics update loop?
+			- maybe only half the time?
+		- maybe replace interpolation with server sending more gamestates
+	- avoid floating point coordinates
+	- pre-render if possible
 
 - Player should be slightly offset from center of canvas depending on movement
 - Move bullets to Weapon class
