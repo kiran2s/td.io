@@ -1,5 +1,8 @@
 - Review code
 - Correct deltaTime functionality
+	- server maintains last few input update times for all clients
+- Improve performance
+	- better data structure for holding updates
 
 - Player should be slightly offset from center of canvas depending on movement
 - Move bullets to Weapon class
