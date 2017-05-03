@@ -9,32 +9,6 @@
 
 - Add comments
 
----------------------------------------------------------------------------
-
-- client
-	- game state update loop
-		- capture input
-		- update game state
-	- draw loop
-		- draw to canvas
-
-- client/server
-	- save inputs at clients
-	- send updates to server
-	- receive updates at clients
-		- save server state
-		- clear processed inputs
-		- client prediction
-		- entity interpolation
-
-- server
-	- client update loop
-	- game state update loop
-		- gather all inputs from clients
-		- update game state
-		- keep track of last input processed for each client
-		- clear inputs
-
 -----------------------------------------------------------------------
 Bugs:
 - setTranform affects clearing canvas
