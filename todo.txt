@@ -1,4 +1,8 @@
 - Review code
+	- Make all GameObjects in shared abstract or use them for creating updates at the server.
+	- gameState updates should be in correct order
+	- possibly eliminate having to iterate through all input updates since last gameStateUpdate
+	- get rid of awful variable name "adjustedBulletVelocity"
 - Correct deltaTime functionality
 	- server calculates deltaTime for each inputUpdate
 	- client sends server deltaTime
@@ -13,7 +17,17 @@
 	- pre-render if possible
 
 - Player should be slightly offset from center of canvas depending on movement
-- Move bullets to Weapon class
+- Client prediction for bullets
+	- Move bullets to Weapon class
+
+- Allow more than 1 Client to connect
+	- Player/bullet collisions
+- Base
+- Minimap
+- Inventory
+- Player Attributes
+- Leaderboard
+- Indicator if base being attacked
 
 - Add comments
 
