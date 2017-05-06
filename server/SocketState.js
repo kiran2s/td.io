@@ -1,7 +1,7 @@
 'use socket';
 
 class SocketState {
-    constructor(socket, lastProcessedSequenceNumber) {
+    constructor(socket, lastProcessedSequenceNumber, prevTime) {
         this.socket = socket;
         this.lastProcessedSequenceNumber = lastProcessedSequenceNumber;
         this.updates = [];

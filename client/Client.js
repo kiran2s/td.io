@@ -51,7 +51,7 @@ class Client {
 	}
 
 	run() {
-		this.prevTime = Date.now();
+		this.prevTime = Date.now(); 
 		this.updateGameStateID = setInterval(this.updateGameState.bind(this), 15);
 		window.requestAnimationFrame(this.draw.bind(this));
 	}
@@ -66,6 +66,7 @@ class Client {
 
 	handleUpdateFromServer(gameStateUpdate) {
 		let currTime = Date.now();
+
 		this.gameStateUpdates.push(gameStateUpdate);
 		let discardIndex = this.getInterpolationIndex(currTime) - 1;
 		if (discardIndex >= 0) {
@@ -77,12 +78,43 @@ class Client {
 				return inputUpdate.sequenceNumber === gameStateUpdate.sequenceNumber;
 			}
 		);
-		if (discardIndex !== -1) {
+
+		//if sequence number not found, then it must be associated with a discarded input.
+		//this means that a more recent server update has already been applied, so we can ignore the current server update.
+		if (discardIndex !== -1) { 
 			this.inputUpdates.splice(0, discardIndex + 1);
+			
+
+			//block MOVED from updateGameState() -- want to apply inputs to server update immediately, only once.
+			if (this.gamestate !== null) {
+				if (!this.gameStateUpdates[this.gameStateUpdates.length-1].players[this.ID]) this.gamestate=null;
+				else {
+					this.gamestate.setPlayerProperties(this.gameStateUpdates[this.gameStateUpdates.length-1].players[this.ID]);
+					for (let i = 0; i < this.inputUpdates.length; i++) {
+						this.gamestate.updatePlayer(
+							this.inputUpdates[i],
+							this.inputUpdates[i].deltaTime
+						);
+					}
+				}
+			}
+
+			else {
+				if (inputUpdate.isMouseLeftButtonDown || 'space' in keys) {
+					//this.gamestate = new ClientGameState(Globals.WORLD_WIDTH, Globals.WORLD_HEIGHT);
+					//playState = true;
+				}
+			}
+
+			/*
+			if (!playState) {
+				this.gamestate = null;
+			}
+			*/
 		}
 	}
 	
-	updateGameState() {
+	updateGameState() { 
 		let currTime = Date.now();
 		let deltaTime = (currTime - this.prevTime) / 1000;
 		this.prevTime = currTime;
@@ -112,34 +144,24 @@ class Client {
 		
 		let mouseDirection = new Vector2D(this.mouse.x, this.mouse.y).sub(new Vector2D(this.canvas.width/2, this.canvas.height/2));
 		
-		let inputUpdate = new InputUpdate(++this.currentSequenceNumber, keys, mouseDirection, this.mouse.isLeftButtonDown);
+
+		let inputUpdate = new InputUpdate(
+							++this.currentSequenceNumber, 
+							keys, 
+							mouseDirection, 
+							this.mouse.isLeftButtonDown, 
+							deltaTime);
+
 		this.inputUpdates.push(inputUpdate);
 		this.socket.emit('update', inputUpdate);
-		
-		//let playState = false;
-		if (this.gamestate !== null) {
-			//playState = this.gamestate.update(input);
-			this.gamestate.setPlayerProperties(this.gameStateUpdates[this.gameStateUpdates.length-1].players[this.ID]);
-			for (let i = 0; i < this.inputUpdates.length; i++) {
-				this.gamestate.updatePlayer(
-					this.inputUpdates[i],
-					deltaTime
-				);
-			}
-		}
-		// TODO
-		else {
-			if (inputUpdate.isMouseLeftButtonDown || 'space' in keys) {
-				//this.gamestate = new ClientGameState(Globals.WORLD_WIDTH, Globals.WORLD_HEIGHT);
-				//playState = true;
-			}
-		}
 
-		/*
-		if (!playState) {
-			this.gamestate = null;
+		//Client prediction.
+		if (this.gamestate!==null){
+			this.gamestate.updatePlayer(
+						inputUpdate,
+						inputUpdate.deltaTime
+			);	
 		}
-		*/
 
 		updateAccumTime += Date.now() - currTime;
 		updateCount++;

@@ -16,12 +16,12 @@ class Server {
 		this.app = express();
 		this.httpSrv = http.Server(this.app);
 		this.sio = io(this.httpSrv);
-		this.sockets = {};
+		this.sockets = {}; //socket hash
 		this.prevTime;
 
 		this.app.use(express.static(path.join(__dirname, '../')));
 
-		this.gamestate = new ServerGameState(Globals.WORLD_WIDTH, Globals.WORLD_HEIGHT);
+		this.gamestate = new ServerGameState(Globals.WORLD_WIDTH, Globals.WORLD_HEIGHT); //init ServerGameState
 
 		this.app.get(
 			'/',
@@ -42,62 +42,68 @@ class Server {
 			}
 		);
 
-		this.prevTime = Date.now();
-		this.updateGameStateID = setInterval(this.updateGameState.bind(this), 15);
-		this.updateClientsID = setInterval(this.updateClients.bind(this), 45);
+		this.prevTime = Date.now(); //init prevTime
+		this.updateGameStateID = setInterval(this.updateGameState.bind(this), 15);  //update ServerGameState every 15 ms
+		this.updateClientsID = setInterval(this.updateClients.bind(this), 45); //update Clients every 45 ms
 	}
 
 	onConnection(socket) {
 		console.log('User connected: ' + socket.id);
-		let socketState = new SocketState(socket, 0);
-		this.sockets[socket.id] = socketState;
+		let socketState = new SocketState(socket, 0);  //init SocketState (socket, last processed seq, updates array)
+		this.sockets[socket.id] = socketState; //add SocketState to sockets hash
 
-		this.gamestate.addPlayer(socket.id);
+		this.gamestate.addPlayer(socket.id); //add player to ServerGameState
 
-		socket.emit(
-			'init',
+		socket.emit( //'init' sent to client
+			'init', 
 			{
-				clientID: socket.id,
-				worldWidth: this.gamestate.worldWidth,
-				worldHeight: this.gamestate.worldHeight,
+				clientID: socket.id,  
+				worldWidth: this.gamestate.worldWidth, 
+				worldHeight: this.gamestate.worldHeight, 
 				gameStateUpdate: new GameStateUpdate(
-						socketState.lastProcessedSequenceNumber, 
-						this.gamestate.players, 
-						this.gamestate.bullets, 
-						this.gamestate.collectibles,  
-						Date.now()
+						socketState.lastProcessedSequenceNumber, //last processed seq
+						this.gamestate.players,  //players
+						this.gamestate.bullets,  //bullets
+						this.gamestate.collectibles,   //collectibles
+						Date.now() //current time
 				)
 			}
 		);
 
-		socket.on(
+		socket.on( //'update' sent to server
 			'update',
+			//adds to updates list, maintaining order by sequence number
 			function(inputUpdate) {
-				socketState.updates.push(inputUpdate);
+				let i = socketState.updates.length;
+				while (i > 0 && socketState.updates[i-1].sequenceNumber > inputUpdate.sequenceNumber){
+					i--;
+				}
+				socketState.updates.splice(i, 0, inputUpdate); //add update to array
 			}
+				
 		);
 
-		socket.on(
+		socket.on( //'disconnect' sent to server
 			'disconnect',
 			function() {
-				this.gamestate.deletePlayer(socket.id);
-				delete this.sockets[socket.id];
+				this.gamestate.deletePlayer(socket.id); //delete player from GameState
+				delete this.sockets[socket.id]; //delete SocketState
 				console.log('User disconnected: ' + socket.id);
 			}.bind(this)
 		);
 	}
 
-	updateGameState() {
+	updateGameState() { //repeated every
 		let currTime = Date.now();
 		let deltaTime = (currTime - this.prevTime) / 1000;
-		this.prevTime = currTime;
+		this.prevTime = currTime; 
 
 		for (let clientID in this.sockets) {
-			let socketState = this.sockets[clientID];
+			let socketState = this.sockets[clientID]; //iterate through SocketStates
 			if (socketState instanceof SocketState) {
-				let updatesLength = socketState.updates.length;
-				for (let i = 0; i < updatesLength; i++) {
-					this.gamestate.updatePlayer(socketState.socket.id, socketState.updates[i], deltaTime);
+				let updatesLength = socketState.updates.length; 
+				for (let i = 0; i < updatesLength; i++) { //iterate through the update array
+					this.gamestate.updatePlayer(socketState.socket.id, socketState.updates[i], deltaTime); //update Player in GameState (run through all updates in array)
 				}
 				if (updatesLength > 0) {
 					socketState.lastProcessedSequenceNumber = socketState.updates[updatesLength - 1].sequenceNumber;
