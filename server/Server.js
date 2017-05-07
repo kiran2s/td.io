@@ -78,7 +78,7 @@ class Server {
 				
 				let currTime = Date.now();
 				// Verify that timestamp falls within realistic range
-				if (inputUpdate.timestamp > currTime || inputUpdate.timestamp < currTime - 1000) {
+				if (inputUpdate.timestamp > currTime + 100 || inputUpdate.timestamp < currTime - 1000) {
 					console.log("Rejected input update from " + socket.id);
 					return;
 				}
@@ -134,6 +134,7 @@ class Server {
 	}
 
 	updateClients() {
+		let currTime = Date.now();
 		for (let clientID in this.sockets) {
 			let socketState = this.sockets[clientID];
 			if (socketState instanceof SocketState) {
@@ -144,7 +145,7 @@ class Server {
 						this.gamestate.players, 
 						this.gamestate.bullets, 
 						this.gamestate.collectibles, 
-						Date.now()
+						currTime
 					)
 				);
 			}

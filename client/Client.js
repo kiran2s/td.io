@@ -234,28 +234,32 @@ class Client {
 		if (interpolationIndex === this.gameStateUpdates.length - 1) {
 			for (let id in gameStateUpdate_1.bullets) {
 				let bullet = gameStateUpdate_1.bullets[id];
-				bullets.push(
-					new ClientBullet(
-						bullet.position, 
-						bullet.radius, 
-						bullet.health, 
-						bullet.color, 
-						bullet.outlineColor
-					)
-				);
+				if (this.isWithinCameraView(bullet.position)) {
+					bullets.push(
+						new ClientBullet(
+							bullet.position, 
+							bullet.radius, 
+							bullet.health, 
+							bullet.color, 
+							bullet.outlineColor
+						)
+					);
+				}
 			}
 			for (let id in gameStateUpdate_1.collectibles) {
 				let collectible = gameStateUpdate_1.collectibles[id];
-				collectibles.push(
-					new ClientCollectible(
-						collectible.position, 
-						collectible.size, 
-						collectible.orientation, 
-						collectible.health, 
-						collectible.color, 
-						collectible.outlineColor
-					)
-				);
+				if (this.isWithinCameraView(collectible.position)) {
+					collectibles.push(
+						new ClientCollectible(
+							collectible.position, 
+							collectible.size, 
+							collectible.orientation, 
+							collectible.health, 
+							collectible.color, 
+							collectible.outlineColor
+						)
+					);
+				}
 			}
 		}
 		else {
@@ -267,57 +271,61 @@ class Client {
 
 			for (let id in gameStateUpdate_2.bullets) {
 				let bullet_2 = gameStateUpdate_2.bullets[id];
-				if (id in gameStateUpdate_1.bullets) {
-					let bullet_1 = gameStateUpdate_1.bullets[id];
-					var interpX = antiInterpolationFactor * bullet_1.position.x + interpolationFactor * bullet_2.position.x;
-					var interpY = antiInterpolationFactor * bullet_1.position.y + interpolationFactor * bullet_2.position.y;
-				}
-				else {
-					var interpX = bullet_2.position.x;
-					var interpY = bullet_2.position.y;
-				}
+				if (this.isWithinCameraView(bullet_2.position)) {
+					if (id in gameStateUpdate_1.bullets) {
+						let bullet_1 = gameStateUpdate_1.bullets[id];
+						var interpX = antiInterpolationFactor * bullet_1.position.x + interpolationFactor * bullet_2.position.x;
+						var interpY = antiInterpolationFactor * bullet_1.position.y + interpolationFactor * bullet_2.position.y;
+					}
+					else {
+						var interpX = bullet_2.position.x;
+						var interpY = bullet_2.position.y;
+					}
 
-				bullets.push(
-					new ClientBullet(
-						{
-							x: interpX,
-							y: interpY
-						}, 
-						bullet_2.radius, 
-						bullet_2.health, 
-						bullet_2.color, 
-						bullet_2.outlineColor
-					)
-				);
+					bullets.push(
+						new ClientBullet(
+							{
+								x: interpX,
+								y: interpY
+							}, 
+							bullet_2.radius, 
+							bullet_2.health, 
+							bullet_2.color, 
+							bullet_2.outlineColor
+						)
+					);
+				}
 			}
 
 			for (let id in gameStateUpdate_2.collectibles) {
 				let collectible_2 = gameStateUpdate_2.collectibles[id];
-				if (id in gameStateUpdate_1.collectibles) {
-					let collectible_1 = gameStateUpdate_1.collectibles[id];
-					var interpX = antiInterpolationFactor * collectible_1.position.x + interpolationFactor * collectible_2.position.x;
-					var interpY = antiInterpolationFactor * collectible_1.position.y + interpolationFactor * collectible_2.position.y;
-					var interpOrientation = antiInterpolationFactor * collectible_1.orientation + interpolationFactor * collectible_2.orientation;
-				}
-				else {
-					var interpX = collectible_2.position.x;
-					var interpY = collectible_2.position.y;
-					var interpOrientation = collectible_2.orientation;
-				}
+				if (this.isWithinCameraView(collectible_2.position)) {
+					if (id in gameStateUpdate_1.collectibles) {
+						let collectible_1 = gameStateUpdate_1.collectibles[id];
+						var interpX = antiInterpolationFactor * collectible_1.position.x + interpolationFactor * collectible_2.position.x;
+						var interpY = antiInterpolationFactor * collectible_1.position.y + interpolationFactor * collectible_2.position.y;
+						var interpOrientation = antiInterpolationFactor * collectible_1.orientation + interpolationFactor * collectible_2.orientation;
+					}
+					else {
+						var interpX = collectible_2.position.x;
+						var interpY = collectible_2.position.y;
+						var interpOrientation = collectible_2.orientation;
+					}
 
-				collectibles.push(
-					new ClientCollectible(
-						{
-							x: interpX,
-							y: interpY
-						}, 
-						collectible_2.size, 
-						interpOrientation, 
-						collectible_2.health, 
-						collectible_2.color, 
-						collectible_2.outlineColor
-					)
-				);
+					collectibles.push(
+						new ClientCollectible(
+							{
+								x: interpX,
+								y: interpY
+							}, 
+							collectible_2.size, 
+							interpOrientation, 
+							collectible_2.health, 
+							collectible_2.color, 
+							collectible_2.outlineColor
+						)
+					);
+				}
 			}
 		}
 
@@ -341,6 +349,14 @@ class Client {
 		}
 
 		return interpolationIndex;
+	}
+
+	isWithinCameraView(position) {
+		let playerPos = this.gamestate.player.position;
+		let viewWidth = this.canvas.width/2 + 100;
+		let viewHeight = this.canvas.height/2 + 100;
+		return 	position.x > playerPos.x - viewWidth && position.x < playerPos.x + viewWidth &&
+				position.y > playerPos.y - viewHeight && position.y < playerPos.y + viewHeight;
 	}
 	
 	onWindowResize(event) {
