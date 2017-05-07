@@ -73,13 +73,13 @@ class ServerGameState extends GameState {
 		}
 
 		let preUpdateBuckets = this.findBuckets(player);
-		let adjustedPlayerVelocity = player.update(
+		let displacement = player.update(
 			deltaTime, 
 			input.keysPressed, 
 			input.mouseDirection
 		);
 		if (!this.isWithinGameWorld(player.position)) {
-			player.position.sub(adjustedPlayerVelocity);
+			player.position.sub(displacement);
 			player.velocity.set(0, 0);
 			player.updateRange();
 		}

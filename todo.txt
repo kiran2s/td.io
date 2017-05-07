@@ -1,7 +1,5 @@
 - Review code
 	- Make all GameObjects in shared abstract or use them for creating updates at the server.
-	- gameState updates should be in correct order
-	- possibly eliminate having to iterate through all input updates since last gameStateUpdate
 	- get rid of awful variable name "adjustedBulletVelocity"
 - Correct deltaTime functionality
 	- server calculates deltaTime for each inputUpdate
@@ -13,7 +11,6 @@
 		- interpolate in physics update loop?
 			- maybe only half the time?
 		- maybe replace interpolation with server sending more gamestates
-	- avoid floating point coordinates
 	- pre-render if possible
 
 - Player should be slightly offset from center of canvas depending on movement

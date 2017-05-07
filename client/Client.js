@@ -51,7 +51,7 @@ class Client {
 	}
 
 	run() {
-		this.prevTime = Date.now(); 
+		this.prevTime = Date.now();
 		this.updateGameStateID = setInterval(this.updateGameState.bind(this), 15);
 		window.requestAnimationFrame(this.draw.bind(this));
 	}
@@ -84,10 +84,10 @@ class Client {
 		if (discardIndex !== -1) { 
 			this.inputUpdates.splice(0, discardIndex + 1);
 			
-
 			//block MOVED from updateGameState() -- want to apply inputs to server update immediately, only once.
 			if (this.gamestate !== null) {
-				if (!this.gameStateUpdates[this.gameStateUpdates.length-1].players[this.ID]) this.gamestate=null;
+				if (!(this.ID in this.gameStateUpdates[this.gameStateUpdates.length-1].players))
+					this.gamestate=null;
 				else {
 					this.gamestate.setPlayerProperties(this.gameStateUpdates[this.gameStateUpdates.length-1].players[this.ID]);
 					for (let i = 0; i < this.inputUpdates.length; i++) {
@@ -98,23 +98,10 @@ class Client {
 					}
 				}
 			}
-
-			else {
-				if (inputUpdate.isMouseLeftButtonDown || 'space' in keys) {
-					//this.gamestate = new ClientGameState(Globals.WORLD_WIDTH, Globals.WORLD_HEIGHT);
-					//playState = true;
-				}
-			}
-
-			/*
-			if (!playState) {
-				this.gamestate = null;
-			}
-			*/
 		}
 	}
 	
-	updateGameState() { 
+	updateGameState() {
 		let currTime = Date.now();
 		let deltaTime = (currTime - this.prevTime) / 1000;
 		this.prevTime = currTime;
@@ -156,12 +143,24 @@ class Client {
 		this.socket.emit('update', inputUpdate);
 
 		//Client prediction.
-		if (this.gamestate!==null){
+		if (this.gamestate !== null){
 			this.gamestate.updatePlayer(
 						inputUpdate,
 						inputUpdate.deltaTime
 			);	
 		}
+		else {
+			if (inputUpdate.isMouseLeftButtonDown || 'space' in keys) {
+			//this.gamestate = new ClientGameState(Globals.WORLD_WIDTH, Globals.WORLD_HEIGHT);
+			//playState = true;
+			}
+		}
+
+		/*
+		if (!playState) {
+			this.gamestate = null;
+		}
+		*/
 
 		updateAccumTime += Date.now() - currTime;
 		updateCount++;

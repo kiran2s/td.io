@@ -60,12 +60,12 @@ class Player extends GameObject {
 			this.velocity.setLength(this.maxSpeed);
 		}
 		
-		let adjustedPlayerVelocity = new Vector2D().copy(this.velocity).mul(deltaTime);
-		this.position.add(adjustedPlayerVelocity);
+		let displacement = new Vector2D().copy(this.velocity).mul(deltaTime);
+		this.position.add(displacement);
 		
 		this.orientation = this.convertToOrientation(mouseDirection);
 		
-		return adjustedPlayerVelocity;
+		return displacement;
 	}
 	
 	convertToOrientation(direction) {

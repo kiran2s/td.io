@@ -39,8 +39,8 @@ class ServerCollectible extends Collectible {
 			this.movementAngle += Globals.DEGREES_360
 		}
 		this.velocity.set(Math.cos(this.movementAngle), Math.sin(this.movementAngle)).setLength(this.speed);
-		let adjustedVelocity = new Vector2D().copy(this.velocity).mul(deltaTime);
-		this.position.add(adjustedVelocity);
+		let displacement = new Vector2D().copy(this.velocity).mul(deltaTime);
+		this.position.add(displacement);
 		this.orientation += this.rotationSpeed * deltaTime;
 
 		this.updateRange();

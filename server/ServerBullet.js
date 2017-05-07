@@ -26,8 +26,8 @@ class ServerBullet extends Bullet {
 	}
 	
 	update(deltaTime) {
-		let adjustedBulletVelocity = new Vector2D().copy(this.velocity).mul(deltaTime);
-		this.position.add(adjustedBulletVelocity);
+		let displacement = new Vector2D().copy(this.velocity).mul(deltaTime);
+		this.position.add(displacement);
 		this.updateRange();
 	}
 }

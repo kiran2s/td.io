@@ -52,7 +52,7 @@ class Client {
 	}
 
 	run() {
-		this.prevTime = Date.now(); 
+		this.prevTime = Date.now();
 		this.updateGameStateID = setInterval(this.updateGameState.bind(this), 15);
 		window.requestAnimationFrame(this.draw.bind(this));
 	}
@@ -66,7 +66,6 @@ class Client {
 	}
 
 	handleUpdateFromServer(gameStateUpdate) {
-		console.log("WOW");
 		let currTime = Date.now();
 
 		this.gameStateUpdates.push(gameStateUpdate);
@@ -86,10 +85,10 @@ class Client {
 		if (discardIndex !== -1) { 
 			this.inputUpdates.splice(0, discardIndex + 1);
 			
-
 			//block MOVED from updateGameState() -- want to apply inputs to server update immediately, only once.
 			if (this.gamestate !== null) {
-				if (!this.gameStateUpdates[this.gameStateUpdates.length-1].players[this.ID]) this.gamestate=null;
+				if (!(this.ID in this.gameStateUpdates[this.gameStateUpdates.length-1].players))
+					this.gamestate=null;
 				else {
 					this.gamestate.setPlayerProperties(this.gameStateUpdates[this.gameStateUpdates.length-1].players[this.ID]);
 					for (let i = 0; i < this.inputUpdates.length; i++) {
@@ -100,23 +99,10 @@ class Client {
 					}
 				}
 			}
-
-			else {
-				if (inputUpdate.isMouseLeftButtonDown || 'space' in keys) {
-					//this.gamestate = new ClientGameState(Globals.WORLD_WIDTH, Globals.WORLD_HEIGHT);
-					//playState = true;
-				}
-			}
-
-			/*
-			if (!playState) {
-				this.gamestate = null;
-			}
-			*/
 		}
 	}
 	
-	updateGameState() { 
+	updateGameState() {
 		let currTime = Date.now();
 		let deltaTime = (currTime - this.prevTime) / 1000;
 		this.prevTime = currTime;
@@ -158,12 +144,24 @@ class Client {
 		this.socket.emit('update', inputUpdate);
 
 		//Client prediction.
-		if (this.gamestate!==null){
+		if (this.gamestate !== null){
 			this.gamestate.updatePlayer(
 						inputUpdate,
 						inputUpdate.deltaTime
 			);	
 		}
+		else {
+			if (inputUpdate.isMouseLeftButtonDown || 'space' in keys) {
+			//this.gamestate = new ClientGameState(Globals.WORLD_WIDTH, Globals.WORLD_HEIGHT);
+			//playState = true;
+			}
+		}
+
+		/*
+		if (!playState) {
+			this.gamestate = null;
+		}
+		*/
 
 		updateAccumTime += Date.now() - currTime;
 		updateCount++;
@@ -368,7 +366,8 @@ class ClientBullet extends Bullet {
 	draw(ctx, transformToCameraCoords) {
 		transformToCameraCoords();
 		ctx.beginPath();
-		ctx.arc(~~(0.5 + this.position.x), ~~(0.5 + this.position.y), this.radius, 0, Globals.DEGREES_360); //rounded
+		ctx.arc(this.position.x, this.position.y, this.radius, 0, Globals.DEGREES_360); // unrounded
+		//ctx.arc(~~(0.5 + this.position.x), ~~(0.5 + this.position.y), this.radius, 0, Globals.DEGREES_360); //rounded
 		ctx.fillStyle = this.color;
 		ctx.fill();
 		ctx.strokeStyle = this.outlineColor;
@@ -398,7 +397,8 @@ class ClientCollectible extends Collectible {
 	
 	draw(ctx, transformToCameraCoords) {
 		transformToCameraCoords();
-		ctx.transform(1, 0, 0, 1, ~~(0.5 + this.position.x), ~~(0.5 + this.position.y)); //rounded
+		ctx.transform(1, 0, 0, 1, this.position.x, this.position.y); //unrounded
+		//ctx.transform(1, 0, 0, 1, ~~(0.5 + this.position.x), ~~(0.5 + this.position.y)); //rounded
 		ctx.rotate(this.orientation);
 		ctx.transform(1, 0, 0, 1, -this.size/2, -this.size/2);
 		ctx.fillStyle = this.color;
@@ -411,7 +411,8 @@ class ClientCollectible extends Collectible {
 		if (this.health < 100) {
 			this.healthBar.update(this.health);
 			transformToCameraCoords();
-			ctx.transform(1, 0, 0, 1, ~~(0.5 + this.position.x), ~~(0.5 + this.position.y)); //rounded
+			ctx.transform(1, 0, 0, 1, this.position.x, this.position.y); //unrounded
+			//ctx.transform(1, 0, 0, 1, ~~(0.5 + this.position.x), ~~(0.5 + this.position.y)); //rounded
 			this.healthBar.draw(ctx);
 		}
 	}
@@ -443,8 +444,10 @@ class ClientGameState extends GameState {
 		let canvas = this.canvas;
 		let transformToCameraCoords = function() {
 			ctx.setTransform(1, 0, 0, 1, 
-				canvas.width/2 - ~~(0.5 + playerPosition.x), //rounded
-				canvas.height/2 - ~~(0.5 + playerPosition.y) //rounded
+				canvas.width/2 - playerPosition.x, //unrounded
+				canvas.height/2 - playerPosition.y //unrounded
+				//canvas.width/2 - ~~(0.5 + playerPosition.x), //rounded
+				//canvas.height/2 - ~~(0.5 + playerPosition.y) //rounded
 			);
 		};
 
@@ -558,7 +561,8 @@ class ClientWeapon extends Weapon {
 	}
 	
 	draw(ctx) {
-		ctx.transform(1, 0, 0, 1, ~~(0.5 + this.position.x), ~~(0.5 + this.position.y)); //rounded
+		ctx.transform(1, 0, 0, 1, this.position.x, this.position.y); //unrounded
+		//ctx.transform(1, 0, 0, 1, ~~(0.5 + this.position.x), ~~(0.5 + this.position.y)); //rounded
 		ctx.fillStyle = this.color;
 		ctx.fillRect(0, 0, this.size, this.size);
 		
@@ -606,11 +610,13 @@ class HealthBar extends GameObject {
     }
 
     draw(ctx) {
-		ctx.transform(1, 0, 0, 1, ~~(0.5 + this.position.x - this.halfLength), ~~(0.5 + this.position.y)); //rounded
+        ctx.transform(1, 0, 0, 1, this.position.x - this.halfLength, this.position.y); //unrounded
+		//ctx.transform(1, 0, 0, 1, ~~(0.5 + this.position.x - this.halfLength), ~~(0.5 + this.position.y)); //rounded
 		ctx.fillStyle = this.outlineColor;
         ctx.fillRect(0, 0, this.size, this.width);
         ctx.fillStyle = this.color;
-		ctx.fillRect(0, 0, ~~(0.5 + (this.size * this.percent) / 100), this.width); //rounded
+        ctx.fillRect(0, 0, (this.size * this.percent) / 100, this.width); //unrounded
+		//ctx.fillRect(0, 0, ~~(0.5 + (this.size * this.percent) / 100), this.width); //rounded
 		ctx.strokeStyle = this.outlineColor;
 		ctx.lineWidth = 2;
 		ctx.strokeRect(0, 0, this.size, this.width);
@@ -1007,12 +1013,12 @@ class Player extends GameObject {
 			this.velocity.setLength(this.maxSpeed);
 		}
 		
-		let adjustedPlayerVelocity = new Vector2D().copy(this.velocity).mul(deltaTime);
-		this.position.add(adjustedPlayerVelocity);
+		let displacement = new Vector2D().copy(this.velocity).mul(deltaTime);
+		this.position.add(displacement);
 		
 		this.orientation = this.convertToOrientation(mouseDirection);
 		
-		return adjustedPlayerVelocity;
+		return displacement;
 	}
 	
 	convertToOrientation(direction) {

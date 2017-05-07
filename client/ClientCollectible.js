@@ -16,7 +16,8 @@ class ClientCollectible extends Collectible {
 	
 	draw(ctx, transformToCameraCoords) {
 		transformToCameraCoords();
-		ctx.transform(1, 0, 0, 1, ~~(0.5 + this.position.x), ~~(0.5 + this.position.y)); //rounded
+		ctx.transform(1, 0, 0, 1, this.position.x, this.position.y); //unrounded
+		//ctx.transform(1, 0, 0, 1, ~~(0.5 + this.position.x), ~~(0.5 + this.position.y)); //rounded
 		ctx.rotate(this.orientation);
 		ctx.transform(1, 0, 0, 1, -this.size/2, -this.size/2);
 		ctx.fillStyle = this.color;
@@ -29,7 +30,8 @@ class ClientCollectible extends Collectible {
 		if (this.health < 100) {
 			this.healthBar.update(this.health);
 			transformToCameraCoords();
-			ctx.transform(1, 0, 0, 1, ~~(0.5 + this.position.x), ~~(0.5 + this.position.y)); //rounded
+			ctx.transform(1, 0, 0, 1, this.position.x, this.position.y); //unrounded
+			//ctx.transform(1, 0, 0, 1, ~~(0.5 + this.position.x), ~~(0.5 + this.position.y)); //rounded
 			this.healthBar.draw(ctx);
 		}
 	}
