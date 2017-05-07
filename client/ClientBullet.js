@@ -12,7 +12,7 @@ class ClientBullet extends Bullet {
 	draw(ctx, transformToCameraCoords) {
 		transformToCameraCoords();
 		ctx.beginPath();
-		ctx.arc(this.position.x, this.position.y, this.radius, 0, Globals.DEGREES_360);
+		ctx.arc(~~(0.5 + this.position.x), ~~(0.5 + this.position.y), this.radius, 0, Globals.DEGREES_360); //rounded
 		ctx.fillStyle = this.color;
 		ctx.fill();
 		ctx.strokeStyle = this.outlineColor;

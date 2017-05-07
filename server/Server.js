@@ -74,6 +74,7 @@ class Server {
 			'update',
 			//adds to updates list, maintaining order by sequence number
 			function(inputUpdate) {
+				if (inputUpdate.sequenceNumber < socketState.lastProcessedSequenceNumber) return; //older than last processed sequence number.
 				let i = socketState.updates.length;
 				while (i > 0 && socketState.updates[i-1].sequenceNumber > inputUpdate.sequenceNumber){
 					i--;
@@ -93,7 +94,7 @@ class Server {
 		);
 	}
 
-	updateGameState() { //repeated every
+	updateGameState() { 
 		let currTime = Date.now();
 		let deltaTime = (currTime - this.prevTime) / 1000;
 		this.prevTime = currTime; 

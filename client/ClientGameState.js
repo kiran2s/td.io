@@ -21,8 +21,8 @@ class ClientGameState extends GameState {
 		let canvas = this.canvas;
 		let transformToCameraCoords = function() {
 			ctx.setTransform(1, 0, 0, 1, 
-				canvas.width/2 - playerPosition.x, 
-				canvas.height/2 - playerPosition.y
+				canvas.width/2 - ~~(0.5 + playerPosition.x), //rounded
+				canvas.height/2 - ~~(0.5 + playerPosition.y) //rounded
 			);
 		};
 

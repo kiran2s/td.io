@@ -29,7 +29,7 @@
 - Leaderboard
 - Indicator if base being attacked
 
-- Add comments
+- Add comments 
 
 -----------------------------------------------------------------------
 Bugs:

@@ -66,6 +66,7 @@ class Client {
 	}
 
 	handleUpdateFromServer(gameStateUpdate) {
+		console.log("WOW");
 		let currTime = Date.now();
 
 		this.gameStateUpdates.push(gameStateUpdate);
@@ -157,10 +158,12 @@ class Client {
 		this.socket.emit('update', inputUpdate);
 
 		//Client prediction.
-		this.gamestate.updatePlayer(
-					inputUpdate,
-					inputUpdate.deltaTime
-		);	
+		if (this.gamestate!==null){
+			this.gamestate.updatePlayer(
+						inputUpdate,
+						inputUpdate.deltaTime
+			);	
+		}
 
 		updateAccumTime += Date.now() - currTime;
 		updateCount++;
@@ -365,7 +368,7 @@ class ClientBullet extends Bullet {
 	draw(ctx, transformToCameraCoords) {
 		transformToCameraCoords();
 		ctx.beginPath();
-		ctx.arc(this.position.x, this.position.y, this.radius, 0, Globals.DEGREES_360);
+		ctx.arc(~~(0.5 + this.position.x), ~~(0.5 + this.position.y), this.radius, 0, Globals.DEGREES_360); //rounded
 		ctx.fillStyle = this.color;
 		ctx.fill();
 		ctx.strokeStyle = this.outlineColor;
@@ -390,13 +393,12 @@ class ClientCollectible extends Collectible {
 		this.orientation = orientation;
 		this.color = color;
 		this.outlineColor = outlineColor;
-
 		this.healthBar = new HealthBar(new Vector2D(0, this.size + 10), this.size * 1.5);
 	}
 	
 	draw(ctx, transformToCameraCoords) {
 		transformToCameraCoords();
-		ctx.transform(1, 0, 0, 1, this.position.x, this.position.y);
+		ctx.transform(1, 0, 0, 1, ~~(0.5 + this.position.x), ~~(0.5 + this.position.y)); //rounded
 		ctx.rotate(this.orientation);
 		ctx.transform(1, 0, 0, 1, -this.size/2, -this.size/2);
 		ctx.fillStyle = this.color;
@@ -409,7 +411,7 @@ class ClientCollectible extends Collectible {
 		if (this.health < 100) {
 			this.healthBar.update(this.health);
 			transformToCameraCoords();
-			ctx.transform(1, 0, 0, 1, this.position.x, this.position.y);
+			ctx.transform(1, 0, 0, 1, ~~(0.5 + this.position.x), ~~(0.5 + this.position.y)); //rounded
 			this.healthBar.draw(ctx);
 		}
 	}
@@ -441,8 +443,8 @@ class ClientGameState extends GameState {
 		let canvas = this.canvas;
 		let transformToCameraCoords = function() {
 			ctx.setTransform(1, 0, 0, 1, 
-				canvas.width/2 - playerPosition.x, 
-				canvas.height/2 - playerPosition.y
+				canvas.width/2 - ~~(0.5 + playerPosition.x), //rounded
+				canvas.height/2 - ~~(0.5 + playerPosition.y) //rounded
 			);
 		};
 
@@ -556,7 +558,7 @@ class ClientWeapon extends Weapon {
 	}
 	
 	draw(ctx) {
-		ctx.transform(1, 0, 0, 1, this.position.x, this.position.y);
+		ctx.transform(1, 0, 0, 1, ~~(0.5 + this.position.x), ~~(0.5 + this.position.y)); //rounded
 		ctx.fillStyle = this.color;
 		ctx.fillRect(0, 0, this.size, this.size);
 		
@@ -604,11 +606,11 @@ class HealthBar extends GameObject {
     }
 
     draw(ctx) {
-		ctx.transform(1, 0, 0, 1, this.position.x - this.halfLength, this.position.y);
+		ctx.transform(1, 0, 0, 1, ~~(0.5 + this.position.x - this.halfLength), ~~(0.5 + this.position.y)); //rounded
 		ctx.fillStyle = this.outlineColor;
         ctx.fillRect(0, 0, this.size, this.width);
         ctx.fillStyle = this.color;
-		ctx.fillRect(0, 0, (this.size * this.percent) / 100, this.width);
+		ctx.fillRect(0, 0, ~~(0.5 + (this.size * this.percent) / 100), this.width); //rounded
 		ctx.strokeStyle = this.outlineColor;
 		ctx.lineWidth = 2;
 		ctx.strokeRect(0, 0, this.size, this.width);

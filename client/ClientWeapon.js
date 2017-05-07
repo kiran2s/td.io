@@ -8,7 +8,7 @@ class ClientWeapon extends Weapon {
 	}
 	
 	draw(ctx) {
-		ctx.transform(1, 0, 0, 1, this.position.x, this.position.y);
+		ctx.transform(1, 0, 0, 1, ~~(0.5 + this.position.x), ~~(0.5 + this.position.y)); //rounded
 		ctx.fillStyle = this.color;
 		ctx.fillRect(0, 0, this.size, this.size);
 		

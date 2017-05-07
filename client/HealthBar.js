@@ -17,11 +17,11 @@ class HealthBar extends GameObject {
     }
 
     draw(ctx) {
-		ctx.transform(1, 0, 0, 1, this.position.x - this.halfLength, this.position.y);
+		ctx.transform(1, 0, 0, 1, ~~(0.5 + this.position.x - this.halfLength), ~~(0.5 + this.position.y)); //rounded
 		ctx.fillStyle = this.outlineColor;
         ctx.fillRect(0, 0, this.size, this.width);
         ctx.fillStyle = this.color;
-		ctx.fillRect(0, 0, (this.size * this.percent) / 100, this.width);
+		ctx.fillRect(0, 0, ~~(0.5 + (this.size * this.percent) / 100), this.width); //rounded
 		ctx.strokeStyle = this.outlineColor;
 		ctx.lineWidth = 2;
 		ctx.strokeRect(0, 0, this.size, this.width);
