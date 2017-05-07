@@ -130,14 +130,15 @@ class Client {
 		}
 		
 		let mouseDirection = new Vector2D(this.mouse.x, this.mouse.y).sub(new Vector2D(this.canvas.width/2, this.canvas.height/2));
-		
 
 		let inputUpdate = new InputUpdate(
 							++this.currentSequenceNumber, 
 							keys, 
 							mouseDirection, 
 							this.mouse.isLeftButtonDown, 
-							deltaTime);
+							Date.now(), 
+							deltaTime
+						);
 
 		this.inputUpdates.push(inputUpdate);
 		this.socket.emit('update', inputUpdate);

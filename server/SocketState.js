@@ -5,6 +5,7 @@ class SocketState {
         this.socket = socket;
         this.lastProcessedSequenceNumber = lastProcessedSequenceNumber;
         this.updates = [];
+        this.baselineTime = Date.now();
     }
 }
 

@@ -1,12 +1,10 @@
 - Review code
 	- Make all GameObjects in shared abstract or use them for creating updates at the server.
-	- get rid of awful variable name "adjustedBulletVelocity"
-- Correct deltaTime functionality
-	- server calculates deltaTime for each inputUpdate
-	- client sends server deltaTime
 - Improve performance
 	- better data structure for holding updates
 	- entity interpolation
+		- don't interpolate objects that won't be drawn
+		- tune interpolation time
 		- compare performance with and without
 		- interpolate in physics update loop?
 			- maybe only half the time?

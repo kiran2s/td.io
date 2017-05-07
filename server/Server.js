@@ -75,8 +75,16 @@ class Server {
 			//adds to updates list, maintaining order by sequence number
 			function(inputUpdate) {
 				if (inputUpdate.sequenceNumber < socketState.lastProcessedSequenceNumber) return; //older than last processed sequence number.
+				
+				let currTime = Date.now();
+				// Verify that timestamp falls within realistic range
+				if (inputUpdate.timestamp > currTime || inputUpdate.timestamp < currTime - 1000) {
+					console.log("Rejected input update from " + socket.id);
+					return;
+				}
+				
 				let i = socketState.updates.length;
-				while (i > 0 && socketState.updates[i-1].sequenceNumber > inputUpdate.sequenceNumber){
+				while (i > 0 && socketState.updates[i-1].sequenceNumber > inputUpdate.sequenceNumber) {
 					i--;
 				}
 				socketState.updates.splice(i, 0, inputUpdate); //add update to array
@@ -104,10 +112,17 @@ class Server {
 			if (socketState instanceof SocketState) {
 				let updatesLength = socketState.updates.length; 
 				for (let i = 0; i < updatesLength; i++) { //iterate through the update array
-					this.gamestate.updatePlayer(socketState.socket.id, socketState.updates[i], deltaTime); //update Player in GameState (run through all updates in array)
+					let inputUpdate = socketState.updates[i];
+					// Calculate client delta-time based on input update timestamps
+					inputUpdate.deltaTime = i === 0 ?
+						inputUpdate.timestamp - socketState.baselineTime :
+						inputUpdate.timestamp - socketState.updates[i-1].timestamp;
+					inputUpdate.deltaTime /= 1000;
+					this.gamestate.updatePlayer(socketState.socket.id, inputUpdate, inputUpdate.deltaTime); //update Player in GameState (run through all updates in array)
 				}
 				if (updatesLength > 0) {
 					socketState.lastProcessedSequenceNumber = socketState.updates[updatesLength - 1].sequenceNumber;
+					socketState.baselineTime = socketState.updates[updatesLength - 1].timestamp;
 				}
 				socketState.updates = [];
 			}
