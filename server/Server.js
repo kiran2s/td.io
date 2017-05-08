@@ -54,22 +54,26 @@ class Server {
 
 		this.gamestate.addPlayer(socket.id); //add player to ServerGameState
 
-		socket.emit( //'init' sent to client
-			'init', 
-			{
-				clientID: socket.id,  
-				worldWidth: this.gamestate.worldWidth, 
-				worldHeight: this.gamestate.worldHeight, 
-				gameStateUpdate: new GameStateUpdate(
-						socketState.lastProcessedSequenceNumber,	// last processed seq
-						this.gamestate.players[socket.id], 			// client player
-						this.gamestate.players,  					// all players
-						this.gamestate.bullets,  					// bullets
-						this.gamestate.collectibles,   				// collectibles
-						Date.now() 									// current time
-				)
-			}
-		);
+		let emitInit = function() {
+			socket.emit( //'init' sent to client
+				'init', 
+				{
+					clientID: socket.id,  
+					worldWidth: this.gamestate.worldWidth, 
+					worldHeight: this.gamestate.worldHeight, 
+					gameStateUpdate: new GameStateUpdate(
+							socketState.lastProcessedSequenceNumber,	// last processed seq
+							this.gamestate.players[socket.id], 			// client player
+							this.gamestate.players,  					// all players
+							this.gamestate.bullets,  					// bullets
+							this.gamestate.collectibles,   				// collectibles
+							Date.now() 									// current time
+					)
+				}
+			);
+		}.bind(this)
+
+		emitInit();
 
 		socket.on( //'update' sent to server
 			'update',
@@ -96,6 +100,16 @@ class Server {
 				socketState.updates.splice(i, 0, inputUpdate); //add update to array
 			}
 				
+		);
+
+		socket.on(
+			'restart',
+			function() {
+				if (!(socket.id in this.gamestate.players)) {
+					this.gamestate.addPlayer(socket.id);
+					emitInit();
+				}
+			}.bind(this)
 		);
 
 		socket.on( //'disconnect' sent to server
@@ -145,12 +159,7 @@ class Server {
 		for (let clientID in this.sockets) {
 			let socketState = this.sockets[clientID];
 			if (socketState instanceof SocketState) {
-				if (clientID in this.gamestate.players) {
-					var clientPlayer = this.gamestate.players[clientID];
-				}
-				else {
-					var clientPlayer = null;
-				}
+				let clientPlayer = (clientID in this.gamestate.players) ? this.gamestate.players[clientID] : null;
 				socketState.socket.emit(
 					'update',
 					new GameStateUpdate(

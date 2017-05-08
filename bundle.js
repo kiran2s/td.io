@@ -61,6 +61,7 @@ class Client {
 
 	handleInitFromServer(data) {
 		this.ID = data.clientID;
+		this.gameStateUpdates = [];
 		this.gameStateUpdates.push(data.gameStateUpdate);
 		this.currentSequenceNumber = data.gameStateUpdate.sequenceNumber;
 		this.gamestate = new ClientGameState(data.worldWidth, data.worldHeight, data.gameStateUpdate.player);
@@ -155,16 +156,9 @@ class Client {
 		}
 		else {
 			if (inputUpdate.isMouseLeftButtonDown || 'space' in keys) {
-			//this.gamestate = new ClientGameState(Globals.WORLD_WIDTH, Globals.WORLD_HEIGHT);
-			//playState = true;
+				this.socket.emit('restart');
 			}
 		}
-
-		/*
-		if (!playState) {
-			this.gamestate = null;
-		}
-		*/
 
 		updateAccumTime += Date.now() - currTime;
 		updateCount++;
@@ -187,6 +181,9 @@ class Client {
 				this.ctx.font = '100px Arial';
 				let msg = "YOU DEAD";
 				this.ctx.fillText(msg, this.canvas.width/2 - this.ctx.measureText(msg).width/2, this.canvas.height/2);
+				this.ctx.font = '32px Arial';
+				msg = "Press 'Space' or 'Left Mouse Button' to restart.";
+				this.ctx.fillText(msg, this.canvas.width/2 - this.ctx.measureText(msg).width/2, this.canvas.height - 40);
 			}
 			window.requestAnimationFrame(this.draw.bind(this));
 			return;
