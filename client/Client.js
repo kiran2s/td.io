@@ -2,6 +2,8 @@
 
 var ClientGameState = require('./ClientGameState');
 var InputUpdate = require('../shared/InputUpdate');
+var ClientPlayer = require('./ClientPlayer');
+var OtherPlayer = require('./OtherPlayer');
 var ClientBullet = require('./ClientBullet');
 var ClientCollectible = require('./ClientCollectible');
 var KeyboardState = require('../lib/THREEx.KeyboardState');
@@ -60,7 +62,7 @@ class Client {
 		this.ID = data.clientID;
 		this.gameStateUpdates.push(data.gameStateUpdate);
 		this.currentSequenceNumber = data.gameStateUpdate.sequenceNumber;
-		this.gamestate = new ClientGameState(data.worldWidth, data.worldHeight, data.gameStateUpdate.players[this.ID]);
+		this.gamestate = new ClientGameState(data.worldWidth, data.worldHeight, data.gameStateUpdate.player);
 		this.gamestateReceived = true;
 	}
 
@@ -86,10 +88,10 @@ class Client {
 			
 			//block MOVED from updateGameState() -- want to apply inputs to server update immediately, only once.
 			if (this.gamestate !== null) {
-				if (!(this.ID in this.gameStateUpdates[this.gameStateUpdates.length-1].players))
+				if (!(this.ID in this.gameStateUpdates[this.gameStateUpdates.length-1].otherPlayers))
 					this.gamestate=null;
 				else {
-					this.gamestate.setPlayerProperties(this.gameStateUpdates[this.gameStateUpdates.length-1].players[this.ID]);
+					this.gamestate.setPlayerProperties(this.gameStateUpdates[this.gameStateUpdates.length-1].player);
 					for (let i = 0; i < this.inputUpdates.length; i++) {
 						this.gamestate.updatePlayer(
 							this.inputUpdates[i],
@@ -148,7 +150,7 @@ class Client {
 			this.gamestate.updatePlayer(
 						inputUpdate,
 						inputUpdate.deltaTime
-			);	
+			);
 		}
 		else {
 			if (inputUpdate.isMouseLeftButtonDown || 'space' in keys) {
@@ -190,7 +192,7 @@ class Client {
 		}
 
 		let entities = this.performEntityInterpolation();
-		this.gamestate.draw(this.ctx, entities.bullets, entities.collectibles);
+		this.gamestate.draw(this.ctx, entities.otherPlayers, entities.bullets, entities.collectibles);
 		
 		this.ctx.setTransform(1, 0, 0, 1, 0, 0);
 		this.ctx.fillStyle = "purple";
@@ -223,8 +225,10 @@ class Client {
 		window.requestAnimationFrame(this.draw.bind(this));
 	}
 
+	// Linear interpolation
 	performEntityInterpolation() {
 		let currTime = Date.now();
+		let otherPlayers = [];
 		let bullets = [];
 		let collectibles = [];
 
@@ -232,6 +236,25 @@ class Client {
 		let gameStateUpdate_1 = this.gameStateUpdates[interpolationIndex];
 
 		if (interpolationIndex === this.gameStateUpdates.length - 1) {
+			for (let id in gameStateUpdate_1.otherPlayers) {
+				if (id === this.ID) {
+					continue;
+				}
+				let otherPlayer = gameStateUpdate_1.otherPlayers[id];
+				if (this.isWithinCameraView(otherPlayer.position)) {
+					otherPlayers.push(
+						new OtherPlayer(
+							otherPlayer.position, 
+							otherPlayer.size, 
+							otherPlayer.orientation, 
+							otherPlayer.health, 
+							otherPlayer.weapon, 
+							otherPlayer.color, 
+							otherPlayer.outlineColor
+						)
+					);
+				}
+			}
 			for (let id in gameStateUpdate_1.bullets) {
 				let bullet = gameStateUpdate_1.bullets[id];
 				if (this.isWithinCameraView(bullet.position)) {
@@ -269,6 +292,41 @@ class Client {
 			let interpolationFactor = (interpolationTime - gameStateUpdate_1.serverTime) / serverDiffTime;
 			let antiInterpolationFactor = 1 - interpolationFactor;
 
+			for (let id in gameStateUpdate_2.otherPlayers) {
+				if (id === this.ID) {
+					continue;
+				}
+				let otherPlayer_2 = gameStateUpdate_2.otherPlayers[id];
+				if (this.isWithinCameraView(otherPlayer_2.position)) {
+					if (id in gameStateUpdate_1.otherPlayers) {
+						let otherPlayer_1 = gameStateUpdate_1.otherPlayers[id];
+						var interpX = antiInterpolationFactor * otherPlayer_1.position.x + interpolationFactor * otherPlayer_2.position.x;
+						var interpY = antiInterpolationFactor * otherPlayer_1.position.y + interpolationFactor * otherPlayer_2.position.y;
+						var interpOrientation = this.interpolateOrientation(otherPlayer_1.orientation, otherPlayer_2.orientation, interpolationFactor, antiInterpolationFactor);
+					}
+					else {
+						var interpX = otherPlayer_2.position.x;
+						var interpY = otherPlayer_2.position.y;
+						var interpOrientation = otherPlayer_2.orientation;
+					}
+
+					otherPlayers.push(
+						new OtherPlayer(
+							{
+								x: interpX,
+								y: interpY
+							}, 
+							otherPlayer_2.size, 
+							interpOrientation, 
+							otherPlayer_2.health, 
+							otherPlayer_2.weapon, 
+							otherPlayer_2.color, 
+							otherPlayer_2.outlineColor
+						)
+					);
+				}
+			}
+
 			for (let id in gameStateUpdate_2.bullets) {
 				let bullet_2 = gameStateUpdate_2.bullets[id];
 				if (this.isWithinCameraView(bullet_2.position)) {
@@ -296,7 +354,6 @@ class Client {
 					);
 				}
 			}
-
 			for (let id in gameStateUpdate_2.collectibles) {
 				let collectible_2 = gameStateUpdate_2.collectibles[id];
 				if (this.isWithinCameraView(collectible_2.position)) {
@@ -304,7 +361,7 @@ class Client {
 						let collectible_1 = gameStateUpdate_1.collectibles[id];
 						var interpX = antiInterpolationFactor * collectible_1.position.x + interpolationFactor * collectible_2.position.x;
 						var interpY = antiInterpolationFactor * collectible_1.position.y + interpolationFactor * collectible_2.position.y;
-						var interpOrientation = antiInterpolationFactor * collectible_1.orientation + interpolationFactor * collectible_2.orientation;
+						var interpOrientation = this.interpolateOrientation(collectible_1.orientation, collectible_2.orientation, interpolationFactor, antiInterpolationFactor);
 					}
 					else {
 						var interpX = collectible_2.position.x;
@@ -330,9 +387,25 @@ class Client {
 		}
 
 		return {
+			otherPlayers: otherPlayers,
 			bullets: bullets,
 			collectibles: collectibles
 		}
+	}
+
+	interpolateOrientation(orientation_1, orientation_2, interpolationFactor, antiInterpolationFactor) {
+		if (orientation_1 < Globals.DEGREES_90 && orientation_2 > Globals.DEGREES_270) {
+			orientation_1 += Globals.DEGREES_360;
+		}
+		else if (orientation_2 < Globals.DEGREES_90 && orientation_1 > Globals.DEGREES_270) {
+			orientation_2 += Globals.DEGREES_360;
+		}
+
+		let interpOrientation = antiInterpolationFactor * orientation_1 + interpolationFactor * orientation_2;
+		if (interpOrientation > Globals.DEGREES_360) {
+			interpOrientation -= Globals.DEGREES_360;
+		}
+		return interpOrientation;
 	}
 
 	getInterpolationIndex(currTime) {

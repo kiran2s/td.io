@@ -70,7 +70,11 @@ class Player extends GameObject {
 	
 	convertToOrientation(direction) {
 		if (direction.x !== 0) {
-			return Math.atan2(direction.y, direction.x);
+			let orientation = Math.atan2(direction.y, direction.x);
+			if (orientation < 0) {
+				orientation += Globals.DEGREES_360;
+			}
+			return orientation;
 		}
 		else if (direction.y > 0) {
 			return Globals.DEGREES_90;

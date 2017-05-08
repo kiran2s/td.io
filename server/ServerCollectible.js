@@ -6,7 +6,7 @@ var Vector2D = require('../lib/Vector2D');
 var Globals = require('../lib/Globals');
 
 class ServerCollectible extends Collectible {
-	constructor(position, id, health = 100, damage = 10, speed = 10) {
+	constructor(id, position, health = 100, damage = 10, speed = 10) {
 		super(position, health);
 		Collidable.call(this);
 
@@ -42,6 +42,9 @@ class ServerCollectible extends Collectible {
 		let displacement = new Vector2D().copy(this.velocity).mul(deltaTime);
 		this.position.add(displacement);
 		this.orientation += this.rotationSpeed * deltaTime;
+		if (this.orientation > Globals.DEGREES_360) {
+			this.orientation -= Globals.DEGREES_360;
+		}
 
 		this.updateRange();
 	}

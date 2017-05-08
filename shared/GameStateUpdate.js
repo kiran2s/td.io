@@ -5,23 +5,28 @@ var Bullet = require('./Bullet');
 var Collectible = require('./Collectible');
 
 class GameStateUpdate {
-    constructor(sequenceNumber, players, bullets, collectibles, serverTime) {
+    constructor(sequenceNumber, player, otherplayers, bullets, collectibles, serverTime) {
         this.sequenceNumber = sequenceNumber;
-        this.players = {};
+        this.player = null;
+        this.otherPlayers = {};
         this.bullets = {};
         this.collectibles = {};
         this.serverTime = serverTime;
 
-        let fillWithUpdateProperties = function(updates, gameObjects, GameObjectType) {
+        if (player !== null) {
+            this.player = player.getUpdateProperties(false);
+        }
+
+        let fillWithUpdateProperties = function(updates, gameObjects, GameObjectType, liteVersion = false) {
             for (let id in gameObjects) {
                 let gameObject = gameObjects[id];
                 if (gameObject instanceof GameObjectType) {
-                    updates[id] = gameObject.getUpdateProperties();
+                    updates[id] = gameObject.getUpdateProperties(liteVersion);
                 }
             }
         }
 
-        fillWithUpdateProperties(this.players, players, Player);
+        fillWithUpdateProperties(this.otherPlayers, otherplayers, Player, true);
         fillWithUpdateProperties(this.bullets, bullets, Bullet);
         fillWithUpdateProperties(this.collectibles, collectibles, Collectible);
     }

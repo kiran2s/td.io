@@ -16,7 +16,7 @@ class ClientGameState extends GameState {
 		this.grid = document.getElementById("grid");
     }
 	
-	draw(ctx, bullets, collectibles) {
+	draw(ctx, otherPlayers, bullets, collectibles) {
 		let playerPosition = this.player.position;
 		let canvas = this.canvas;
 		let transformToCameraCoords = function() {
@@ -35,6 +35,7 @@ class ClientGameState extends GameState {
 				ctx.setTransform(1, 0, 0, 1, canvas.width/2, canvas.height/2);
 			}
 		);
+		otherPlayers.map(function(otherPlayer) { otherPlayer.draw(ctx, transformToCameraCoords); });
 		bullets.map(function(bullet) { bullet.draw(ctx, transformToCameraCoords); });
 		collectibles.map(function(collectible) { collectible.draw(ctx, transformToCameraCoords); });
 	}

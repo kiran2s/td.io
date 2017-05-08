@@ -45,7 +45,7 @@ class ServerWeapon extends Weapon {
 		};
 	}
 	
-	fire(playerOrientation, playerPosition) {
+	fire(id, playerID, playerOrientation, playerPosition) {
 		let currTime = Date.now();
 		if (currTime - this.prevFireTime > this.msPerBullet) {
 			this.prevFireTime = currTime;
@@ -54,6 +54,8 @@ class ServerWeapon extends Weapon {
 			let bulletPosition = new Vector2D().copy(playerPosition).add(bulletVelocity);
 			bulletVelocity.setLength(this.bulletSpeed);
 			return new ServerBullet(
+				id, 
+				playerID, 
 				bulletVelocity,
 				bulletPosition,
 				this.bulletRadius,

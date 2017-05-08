@@ -61,11 +61,12 @@ class Server {
 				worldWidth: this.gamestate.worldWidth, 
 				worldHeight: this.gamestate.worldHeight, 
 				gameStateUpdate: new GameStateUpdate(
-						socketState.lastProcessedSequenceNumber, //last processed seq
-						this.gamestate.players,  //players
-						this.gamestate.bullets,  //bullets
-						this.gamestate.collectibles,   //collectibles
-						Date.now() //current time
+						socketState.lastProcessedSequenceNumber,	// last processed seq
+						this.gamestate.players[socket.id], 			// client player
+						this.gamestate.players,  					// all players
+						this.gamestate.bullets,  					// bullets
+						this.gamestate.collectibles,   				// collectibles
+						Date.now() 									// current time
 				)
 			}
 		);
@@ -77,15 +78,20 @@ class Server {
 				if (inputUpdate.sequenceNumber < socketState.lastProcessedSequenceNumber) return; //older than last processed sequence number.
 				
 				let currTime = Date.now();
-				// Verify that timestamp falls within realistic range
+				// Verify that timestamp falls within reasonable range
 				if (inputUpdate.timestamp > currTime + 100 || inputUpdate.timestamp < currTime - 1000) {
-					console.log("Rejected input update from " + socket.id);
+					console.log("Rejected input update from " + socket.id + ". Timestamp outside reasonable range.");
 					return;
 				}
 				
 				let i = socketState.updates.length;
 				while (i > 0 && socketState.updates[i-1].sequenceNumber > inputUpdate.sequenceNumber) {
 					i--;
+				}
+				if ((i === 0 && inputUpdate.timestamp < socketState.baselineTime) || 
+					(i  >  0 && inputUpdate.timestamp < socketState.updates[i-1].timestamp)) {
+					console.log("Rejected input update from " + socket.id + ". Timestamp out of order.");
+					return;
 				}
 				socketState.updates.splice(i, 0, inputUpdate); //add update to array
 			}
@@ -121,8 +127,9 @@ class Server {
 					this.gamestate.updatePlayer(socketState.socket.id, inputUpdate, inputUpdate.deltaTime); //update Player in GameState (run through all updates in array)
 				}
 				if (updatesLength > 0) {
-					socketState.lastProcessedSequenceNumber = socketState.updates[updatesLength - 1].sequenceNumber;
-					socketState.baselineTime = socketState.updates[updatesLength - 1].timestamp;
+					let lastUpdate = socketState.updates[updatesLength - 1];
+					socketState.lastProcessedSequenceNumber = lastUpdate.sequenceNumber;
+					socketState.baselineTime = lastUpdate.timestamp;
 				}
 				socketState.updates = [];
 			}
@@ -138,10 +145,17 @@ class Server {
 		for (let clientID in this.sockets) {
 			let socketState = this.sockets[clientID];
 			if (socketState instanceof SocketState) {
+				if (clientID in this.gamestate.players) {
+					var clientPlayer = this.gamestate.players[clientID];
+				}
+				else {
+					var clientPlayer = null;
+				}
 				socketState.socket.emit(
 					'update',
 					new GameStateUpdate(
 						socketState.lastProcessedSequenceNumber, 
+						clientPlayer, 
 						this.gamestate.players, 
 						this.gamestate.bullets, 
 						this.gamestate.collectibles, 

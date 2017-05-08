@@ -3,7 +3,6 @@
 - Improve performance
 	- better data structure for holding updates
 	- entity interpolation
-		- don't interpolate objects that won't be drawn
 		- tune interpolation time
 		- compare performance with and without
 		- interpolate in physics update loop?
@@ -15,8 +14,6 @@
 - Client prediction for bullets
 	- Move bullets to Weapon class
 
-- Allow more than 1 Client to connect
-	- Player/bullet collisions
 - Base
 - Minimap
 - Inventory

@@ -9,10 +9,11 @@ var Globals = require('../lib/Globals');
 const DIAG_ACCEL_FACTOR = Math.cos(Math.PI/4);
 
 class ServerPlayer extends Player {
-	constructor(velocity, position, color) {
+	constructor(id, velocity, position, color) {
 		super(velocity, position, color);
 		Collidable.call(this);
 
+		this.id = id;
 		this.outlineColor = 'rgba(80,80,80,1)';
 		this.acceleration = 7;
 		this.deceleration = 3;
@@ -26,21 +27,34 @@ class ServerPlayer extends Player {
 		this.damage = 100;
 	}
 
-	getUpdateProperties() {
-		return {
-			velocity: this.velocity,
-			position: this.position,
-			size: this.size,
-			acceleration: this.acceleration,
-			deceleration: this.deceleration,
-			maxSpeed: this.maxSpeed,
-			minSpeed: this.minSpeed,
-			orientation: this.orientation,
-			health: this.health,
-			weapon: this.weapon.getUpdateProperties(),
-			color: this.color,
-			outlineColor: this.outlineColor
-		};
+	getUpdateProperties(liteVersion) {
+		if (liteVersion) {
+			return {
+				position: this.position,
+				size: this.size,
+				orientation: this.orientation,
+				health: this.health,
+				weapon: this.weapon.getUpdateProperties(),
+				color: this.color,
+				outlineColor: this.outlineColor
+			};
+		}
+		else {
+			return {
+				velocity: this.velocity,
+				position: this.position,
+				size: this.size,
+				acceleration: this.acceleration,
+				deceleration: this.deceleration,
+				maxSpeed: this.maxSpeed,
+				minSpeed: this.minSpeed,
+				orientation: this.orientation,
+				health: this.health,
+				weapon: this.weapon.getUpdateProperties(),
+				color: this.color,
+				outlineColor: this.outlineColor
+			};
+		}
 	}
 
 	update(deltaTime, keysPressed, mouseDirection) {
@@ -66,8 +80,8 @@ class ServerPlayer extends Player {
 		return retval;
 	}
 	
-	fireWeapon() {
-		return this.weapon.fire(this.orientation, this.position);
+	fireWeapon(id) {
+		return this.weapon.fire(id, this.id, this.orientation, this.position);
 	}
 }
 

@@ -27,6 +27,7 @@ class ServerGameState extends GameState {
 
 	addPlayer(id) {
 		let player = new ServerPlayer(
+			id,
 			new Vector2D(0, 0),
 			new Vector2D(this.worldWidth/2, this.worldHeight/2),
 			'rgba(0,180,255,1)'
@@ -40,7 +41,7 @@ class ServerGameState extends GameState {
 	}
 
 	addBullet(id, player) {
-		let bullet = player.fireWeapon();
+		let bullet = player.fireWeapon(id);
 		if (bullet !== null) {
 			this.bullets[id] = bullet;
 			this.spatialHash.insert(bullet);
@@ -52,7 +53,7 @@ class ServerGameState extends GameState {
 	}
 
 	addCollectible(id, x, y) {
-		let collectible = new ServerCollectible(new Vector2D(x, y), id);
+		let collectible = new ServerCollectible(id, new Vector2D(x, y));
 		this.collectibles[id] = collectible;
 		this.spatialHash.insert(collectible);
 	}
@@ -62,13 +63,18 @@ class ServerGameState extends GameState {
 	}
 
 	deleteGameObject(gameObjects, id) {
-		this.spatialHash.remove(gameObjects[id]);
-		delete gameObjects[id];
+		if (id in gameObjects) {
+			this.spatialHash.remove(gameObjects[id]);
+			delete gameObjects[id];
+		}
 	}
 	
 	updatePlayer(id, input, deltaTime) {
+		if (!(id in this.players)) {
+			return;
+		}
 		let player = this.players[id];
-		if (player === undefined || !(player instanceof ServerPlayer)) {
+		if (player === undefined || player === null || !(player instanceof ServerPlayer)) {
 			return;
 		}
 
@@ -123,13 +129,13 @@ class ServerGameState extends GameState {
 		this._detectCollisions(
 			this.bullets, 
 			'ServerCollectible', 
-			function(bullet, bulletID, collectible) {
+			function(bullet, collectible) {
 				collectible.takeDamage(bullet.damage);
 				if (collectible.health <= 0) {
 					this.deleteCollectible(collectible.id);
 				}
 				else {
-					this.deleteBullet(bulletID);
+					this.deleteBullet(bullet.id);
 				}
 			}.bind(this)
 		);
@@ -137,27 +143,43 @@ class ServerGameState extends GameState {
 		this._detectCollisions(
 			this.players, 
 			'ServerCollectible', 
-			function(player, playerID, collectible) {
+			function(player, collectible) {
 				collectible.takeDamage(player.damage);
 				if (collectible.health <= 0) {
 					this.deleteCollectible(collectible.id);
 				}
 				player.takeDamage(collectible.damage);
 				if (player.health <= 0) {
-					this.deletePlayer(playerID);
+					this.deletePlayer(player.id);
 				}
 			}.bind(this)
 		);
+
+		this._detectCollisions(
+			this.players,
+			'ServerBullet',
+			function(player, bullet) {
+				if (player.id === bullet.ownerID) {
+					return;
+				}
+				player.takeDamage(bullet.damage);
+				if (player.health <= 0) {
+					this.deletePlayer(player.id);
+					return;
+				}
+				this.deleteBullet(bullet.id);
+			}.bind(this)
+		)
 	}
 
-	// collideCallback(collider, colliderID, collidee)
+	// collideCallback(collider, collidee)
 	_detectCollisions(colliders, collideeConstructorName, collideCallback) {
 		for (let id in colliders) {
 			let collider = colliders[id];
 			let intersectList = this.spatialHash.query(collider.range, function(item) { return item.constructor.name === collideeConstructorName; });
 			if (intersectList.length > 0) {
 				let collidee = intersectList[0];
-				collideCallback(collider, id, collidee);
+				collideCallback(collider, collidee);
 			}
 		}
 	}

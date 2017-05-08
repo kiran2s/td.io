@@ -33,11 +33,6 @@ class ClientPlayer extends Player {
 		this.outlineColor = playerUpdateProperties.outlineColor;
 	}
 	
-	update(deltaTime, keysPressed, mouseDirection) {
-		this.healthBar.update(this.health);
-		return super.update(deltaTime, keysPressed, mouseDirection);
-	}
-	
 	draw(ctx, transformToCameraCoords) {
 		transformToCameraCoords();
 		ctx.beginPath();
@@ -50,6 +45,7 @@ class ClientPlayer extends Player {
 		this.weapon.draw(ctx);
 
 		transformToCameraCoords();
+		this.healthBar.update(this.health);
 		this.healthBar.draw(ctx);
 		
 		transformToCameraCoords();

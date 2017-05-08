@@ -3,6 +3,8 @@
 
 var ClientGameState = require('./ClientGameState');
 var InputUpdate = require('../shared/InputUpdate');
+var ClientPlayer = require('./ClientPlayer');
+var OtherPlayer = require('./OtherPlayer');
 var ClientBullet = require('./ClientBullet');
 var ClientCollectible = require('./ClientCollectible');
 var KeyboardState = require('../lib/THREEx.KeyboardState');
@@ -61,7 +63,7 @@ class Client {
 		this.ID = data.clientID;
 		this.gameStateUpdates.push(data.gameStateUpdate);
 		this.currentSequenceNumber = data.gameStateUpdate.sequenceNumber;
-		this.gamestate = new ClientGameState(data.worldWidth, data.worldHeight, data.gameStateUpdate.players[this.ID]);
+		this.gamestate = new ClientGameState(data.worldWidth, data.worldHeight, data.gameStateUpdate.player);
 		this.gamestateReceived = true;
 	}
 
@@ -87,10 +89,10 @@ class Client {
 			
 			//block MOVED from updateGameState() -- want to apply inputs to server update immediately, only once.
 			if (this.gamestate !== null) {
-				if (!(this.ID in this.gameStateUpdates[this.gameStateUpdates.length-1].players))
+				if (!(this.ID in this.gameStateUpdates[this.gameStateUpdates.length-1].otherPlayers))
 					this.gamestate=null;
 				else {
-					this.gamestate.setPlayerProperties(this.gameStateUpdates[this.gameStateUpdates.length-1].players[this.ID]);
+					this.gamestate.setPlayerProperties(this.gameStateUpdates[this.gameStateUpdates.length-1].player);
 					for (let i = 0; i < this.inputUpdates.length; i++) {
 						this.gamestate.updatePlayer(
 							this.inputUpdates[i],
@@ -149,7 +151,7 @@ class Client {
 			this.gamestate.updatePlayer(
 						inputUpdate,
 						inputUpdate.deltaTime
-			);	
+			);
 		}
 		else {
 			if (inputUpdate.isMouseLeftButtonDown || 'space' in keys) {
@@ -191,7 +193,7 @@ class Client {
 		}
 
 		let entities = this.performEntityInterpolation();
-		this.gamestate.draw(this.ctx, entities.bullets, entities.collectibles);
+		this.gamestate.draw(this.ctx, entities.otherPlayers, entities.bullets, entities.collectibles);
 		
 		this.ctx.setTransform(1, 0, 0, 1, 0, 0);
 		this.ctx.fillStyle = "purple";
@@ -224,8 +226,10 @@ class Client {
 		window.requestAnimationFrame(this.draw.bind(this));
 	}
 
+	// Linear interpolation
 	performEntityInterpolation() {
 		let currTime = Date.now();
+		let otherPlayers = [];
 		let bullets = [];
 		let collectibles = [];
 
@@ -233,6 +237,25 @@ class Client {
 		let gameStateUpdate_1 = this.gameStateUpdates[interpolationIndex];
 
 		if (interpolationIndex === this.gameStateUpdates.length - 1) {
+			for (let id in gameStateUpdate_1.otherPlayers) {
+				if (id === this.ID) {
+					continue;
+				}
+				let otherPlayer = gameStateUpdate_1.otherPlayers[id];
+				if (this.isWithinCameraView(otherPlayer.position)) {
+					otherPlayers.push(
+						new OtherPlayer(
+							otherPlayer.position, 
+							otherPlayer.size, 
+							otherPlayer.orientation, 
+							otherPlayer.health, 
+							otherPlayer.weapon, 
+							otherPlayer.color, 
+							otherPlayer.outlineColor
+						)
+					);
+				}
+			}
 			for (let id in gameStateUpdate_1.bullets) {
 				let bullet = gameStateUpdate_1.bullets[id];
 				if (this.isWithinCameraView(bullet.position)) {
@@ -270,6 +293,41 @@ class Client {
 			let interpolationFactor = (interpolationTime - gameStateUpdate_1.serverTime) / serverDiffTime;
 			let antiInterpolationFactor = 1 - interpolationFactor;
 
+			for (let id in gameStateUpdate_2.otherPlayers) {
+				if (id === this.ID) {
+					continue;
+				}
+				let otherPlayer_2 = gameStateUpdate_2.otherPlayers[id];
+				if (this.isWithinCameraView(otherPlayer_2.position)) {
+					if (id in gameStateUpdate_1.otherPlayers) {
+						let otherPlayer_1 = gameStateUpdate_1.otherPlayers[id];
+						var interpX = antiInterpolationFactor * otherPlayer_1.position.x + interpolationFactor * otherPlayer_2.position.x;
+						var interpY = antiInterpolationFactor * otherPlayer_1.position.y + interpolationFactor * otherPlayer_2.position.y;
+						var interpOrientation = this.interpolateOrientation(otherPlayer_1.orientation, otherPlayer_2.orientation, interpolationFactor, antiInterpolationFactor);
+					}
+					else {
+						var interpX = otherPlayer_2.position.x;
+						var interpY = otherPlayer_2.position.y;
+						var interpOrientation = otherPlayer_2.orientation;
+					}
+
+					otherPlayers.push(
+						new OtherPlayer(
+							{
+								x: interpX,
+								y: interpY
+							}, 
+							otherPlayer_2.size, 
+							interpOrientation, 
+							otherPlayer_2.health, 
+							otherPlayer_2.weapon, 
+							otherPlayer_2.color, 
+							otherPlayer_2.outlineColor
+						)
+					);
+				}
+			}
+
 			for (let id in gameStateUpdate_2.bullets) {
 				let bullet_2 = gameStateUpdate_2.bullets[id];
 				if (this.isWithinCameraView(bullet_2.position)) {
@@ -297,7 +355,6 @@ class Client {
 					);
 				}
 			}
-
 			for (let id in gameStateUpdate_2.collectibles) {
 				let collectible_2 = gameStateUpdate_2.collectibles[id];
 				if (this.isWithinCameraView(collectible_2.position)) {
@@ -305,7 +362,7 @@ class Client {
 						let collectible_1 = gameStateUpdate_1.collectibles[id];
 						var interpX = antiInterpolationFactor * collectible_1.position.x + interpolationFactor * collectible_2.position.x;
 						var interpY = antiInterpolationFactor * collectible_1.position.y + interpolationFactor * collectible_2.position.y;
-						var interpOrientation = antiInterpolationFactor * collectible_1.orientation + interpolationFactor * collectible_2.orientation;
+						var interpOrientation = this.interpolateOrientation(collectible_1.orientation, collectible_2.orientation, interpolationFactor, antiInterpolationFactor);
 					}
 					else {
 						var interpX = collectible_2.position.x;
@@ -331,9 +388,25 @@ class Client {
 		}
 
 		return {
+			otherPlayers: otherPlayers,
 			bullets: bullets,
 			collectibles: collectibles
 		}
+	}
+
+	interpolateOrientation(orientation_1, orientation_2, interpolationFactor, antiInterpolationFactor) {
+		if (orientation_1 < Globals.DEGREES_90 && orientation_2 > Globals.DEGREES_270) {
+			orientation_1 += Globals.DEGREES_360;
+		}
+		else if (orientation_2 < Globals.DEGREES_90 && orientation_1 > Globals.DEGREES_270) {
+			orientation_2 += Globals.DEGREES_360;
+		}
+
+		let interpOrientation = antiInterpolationFactor * orientation_1 + interpolationFactor * orientation_2;
+		if (interpOrientation > Globals.DEGREES_360) {
+			interpOrientation -= Globals.DEGREES_360;
+		}
+		return interpOrientation;
 	}
 
 	getInterpolationIndex(currTime) {
@@ -368,7 +441,7 @@ class Client {
 
 module.exports = Client;
 
-},{"../lib/Globals":9,"../lib/MouseState":10,"../lib/THREEx.KeyboardState":11,"../lib/Vector2D":12,"../shared/InputUpdate":17,"./ClientBullet":2,"./ClientCollectible":3,"./ClientGameState":4}],2:[function(require,module,exports){
+},{"../lib/Globals":10,"../lib/MouseState":11,"../lib/THREEx.KeyboardState":12,"../lib/Vector2D":13,"../shared/InputUpdate":18,"./ClientBullet":2,"./ClientCollectible":3,"./ClientGameState":4,"./ClientPlayer":5,"./OtherPlayer":8}],2:[function(require,module,exports){
 'use strict';
 
 var Bullet = require('../shared/Bullet');
@@ -395,7 +468,7 @@ class ClientBullet extends Bullet {
 
 module.exports = ClientBullet;
 
-},{"../lib/Globals":9,"../lib/Vector2D":12,"../shared/Bullet":13}],3:[function(require,module,exports){
+},{"../lib/Globals":10,"../lib/Vector2D":13,"../shared/Bullet":14}],3:[function(require,module,exports){
 'use strict';
 
 var Collectible = require('../shared/Collectible');
@@ -437,7 +510,7 @@ class ClientCollectible extends Collectible {
 
 module.exports = ClientCollectible;
 
-},{"../lib/Vector2D":12,"../shared/Collectible":14,"./HealthBar":7}],4:[function(require,module,exports){
+},{"../lib/Vector2D":13,"../shared/Collectible":15,"./HealthBar":7}],4:[function(require,module,exports){
 'use strict';
 
 var GameState = require('../shared/GameState');
@@ -456,7 +529,7 @@ class ClientGameState extends GameState {
 		this.grid = document.getElementById("grid");
     }
 	
-	draw(ctx, bullets, collectibles) {
+	draw(ctx, otherPlayers, bullets, collectibles) {
 		let playerPosition = this.player.position;
 		let canvas = this.canvas;
 		let transformToCameraCoords = function() {
@@ -475,6 +548,7 @@ class ClientGameState extends GameState {
 				ctx.setTransform(1, 0, 0, 1, canvas.width/2, canvas.height/2);
 			}
 		);
+		otherPlayers.map(function(otherPlayer) { otherPlayer.draw(ctx, transformToCameraCoords); });
 		bullets.map(function(bullet) { bullet.draw(ctx, transformToCameraCoords); });
 		collectibles.map(function(collectible) { collectible.draw(ctx, transformToCameraCoords); });
 	}
@@ -501,7 +575,7 @@ class ClientGameState extends GameState {
 
 module.exports = ClientGameState;
 
-},{"../lib/Globals":9,"../lib/Vector2D":12,"../shared/GameState":16,"./ClientPlayer":5}],5:[function(require,module,exports){
+},{"../lib/Globals":10,"../lib/Vector2D":13,"../shared/GameState":17,"./ClientPlayer":5}],5:[function(require,module,exports){
 'use strict';
 
 var Player = require('../shared/Player');
@@ -537,11 +611,6 @@ class ClientPlayer extends Player {
 		this.outlineColor = playerUpdateProperties.outlineColor;
 	}
 	
-	update(deltaTime, keysPressed, mouseDirection) {
-		this.healthBar.update(this.health);
-		return super.update(deltaTime, keysPressed, mouseDirection);
-	}
-	
 	draw(ctx, transformToCameraCoords) {
 		transformToCameraCoords();
 		ctx.beginPath();
@@ -554,6 +623,7 @@ class ClientPlayer extends Player {
 		this.weapon.draw(ctx);
 
 		transformToCameraCoords();
+		this.healthBar.update(this.health);
 		this.healthBar.draw(ctx);
 		
 		transformToCameraCoords();
@@ -567,7 +637,7 @@ class ClientPlayer extends Player {
 
 module.exports = ClientPlayer;
 
-},{"../lib/Globals":9,"../lib/Vector2D":12,"../shared/Player":18,"./ClientWeapon":6,"./HealthBar":7}],6:[function(require,module,exports){
+},{"../lib/Globals":10,"../lib/Vector2D":13,"../shared/Player":19,"./ClientWeapon":6,"./HealthBar":7}],6:[function(require,module,exports){
 'use strict';
 
 var Weapon = require('../shared/Weapon');
@@ -607,7 +677,7 @@ var ClientWeaponFactory = {
 
 module.exports = ClientWeapon;
 
-},{"../shared/Weapon":19}],7:[function(require,module,exports){
+},{"../shared/Weapon":20}],7:[function(require,module,exports){
 'use strict';
 
 var GameObject = require('../shared/GameObject');
@@ -642,15 +712,65 @@ class HealthBar extends GameObject {
 
 module.exports = HealthBar;
 
-},{"../shared/GameObject":15}],8:[function(require,module,exports){
+},{"../shared/GameObject":16}],8:[function(require,module,exports){
+'use strict';
+
+var GameObject = require('../shared/GameObject');
+var ClientWeapon = require('./ClientWeapon');
+var HealthBar = require('./HealthBar');
+var Vector2D = require('../lib/Vector2D');
+
+class OtherPlayer extends GameObject {
+    constructor(position, size, orientation, health, weapon, color, outlineColor) {
+        super(position, size, color);
+
+        this.radius = this.size/2;
+        this.orientation = orientation;
+        this.health = health;
+        this.weapon = new ClientWeapon(weapon.name, weapon.distanceFromPlayer, weapon.size, weapon.color, weapon.outlineColor);
+        this.outlineColor = outlineColor;
+
+        this.healthBar = new HealthBar(new Vector2D(0, this.radius + 12), this.radius * 2.5);
+    }
+
+	draw(ctx, transformToCameraCoords) {
+		transformToCameraCoords();
+		ctx.beginPath();
+		ctx.arc(this.position.x, this.position.y, this.radius, 0, 2*Math.PI);
+		ctx.fillStyle = this.color;
+		ctx.fill();
+
+		transformToCameraCoords();
+        ctx.transform(1, 0, 0, 1, this.position.x, this.position.y);
+		ctx.rotate(this.orientation);
+		this.weapon.draw(ctx);
+
+		transformToCameraCoords();
+		this.healthBar.update(this.health);
+        ctx.transform(1, 0, 0, 1, this.position.x, this.position.y);
+		this.healthBar.draw(ctx);
+		
+		transformToCameraCoords();
+		ctx.beginPath();
+		ctx.arc(this.position.x, this.position.y, this.radius, 0, 2*Math.PI);
+		ctx.strokeStyle = this.outlineColor;
+		ctx.lineWidth = 3;
+		ctx.stroke();
+	}
+}
+
+module.exports = OtherPlayer;
+
+},{"../lib/Vector2D":13,"../shared/GameObject":16,"./ClientWeapon":6,"./HealthBar":7}],9:[function(require,module,exports){
 'use strict';
 
 var Client = require('./Client');
 new Client().run();
 
-},{"./Client":1}],9:[function(require,module,exports){
+},{"./Client":1}],10:[function(require,module,exports){
 module.exports = {
     DEGREES_90: Math.PI/2,
+    DEGREES_180: Math.PI,
     DEGREES_270: 3*Math.PI/2,
     DEGREES_360: 2*Math.PI,
     WORLD_WIDTH: 4000,
@@ -661,7 +781,7 @@ module.exports = {
     }
 };
 
-},{}],10:[function(require,module,exports){
+},{}],11:[function(require,module,exports){
 /**
  * Author: Kiran Sivakumar
 */
@@ -724,7 +844,7 @@ MouseState.buttonCodes = {
 
 module.exports = MouseState;
 
-},{}],11:[function(require,module,exports){
+},{}],12:[function(require,module,exports){
 /** @namespace */
 var THREEx	= THREEx 		|| {};
 
@@ -809,7 +929,7 @@ THREEx.KeyboardState.prototype.pressed	= function(keyDesc)
 
 module.exports = THREEx.KeyboardState;
 
-},{}],12:[function(require,module,exports){
+},{}],13:[function(require,module,exports){
 /**
  * Author: Kiran Sivakumar
 */
@@ -881,7 +1001,7 @@ class Vector2D {
 
 module.exports = Vector2D;
 
-},{}],13:[function(require,module,exports){
+},{}],14:[function(require,module,exports){
 'use strict';
 
 var GameObject = require('./GameObject');
@@ -897,7 +1017,7 @@ class Bullet extends GameObject {
 
 module.exports = Bullet;
 
-},{"./GameObject":15}],14:[function(require,module,exports){
+},{"./GameObject":16}],15:[function(require,module,exports){
 'use strict';
 
 var GameObject = require('./GameObject');
@@ -914,7 +1034,7 @@ class Collectible extends GameObject {
 
 module.exports = Collectible;
 
-},{"../lib/Globals":9,"./GameObject":15}],15:[function(require,module,exports){
+},{"../lib/Globals":10,"./GameObject":16}],16:[function(require,module,exports){
 'use strict';
 
 /* Abstract */
@@ -940,7 +1060,7 @@ class GameObject {
 
 module.exports = GameObject;
 
-},{}],16:[function(require,module,exports){
+},{}],17:[function(require,module,exports){
 'use strict';
 
 class GameState {	
@@ -952,7 +1072,7 @@ class GameState {
 
 module.exports = GameState;
 
-},{}],17:[function(require,module,exports){
+},{}],18:[function(require,module,exports){
 'use strict';
 
 class InputUpdate {
@@ -968,7 +1088,7 @@ class InputUpdate {
 
 module.exports = InputUpdate;
 
-},{}],18:[function(require,module,exports){
+},{}],19:[function(require,module,exports){
 'use strict';
 
 var GameObject = require('./GameObject');
@@ -1041,7 +1161,11 @@ class Player extends GameObject {
 	
 	convertToOrientation(direction) {
 		if (direction.x !== 0) {
-			return Math.atan2(direction.y, direction.x);
+			let orientation = Math.atan2(direction.y, direction.x);
+			if (orientation < 0) {
+				orientation += Globals.DEGREES_360;
+			}
+			return orientation;
 		}
 		else if (direction.y > 0) {
 			return Globals.DEGREES_90;
@@ -1054,7 +1178,7 @@ class Player extends GameObject {
 
 module.exports = Player;
 
-},{"../lib/Globals":9,"../lib/Vector2D":12,"./GameObject":15}],19:[function(require,module,exports){
+},{"../lib/Globals":10,"../lib/Vector2D":13,"./GameObject":16}],20:[function(require,module,exports){
 'use strict';
 
 var GameObject = require('./GameObject');
@@ -1071,4 +1195,4 @@ class Weapon extends GameObject {
 
 module.exports = Weapon;
 
-},{"../lib/Vector2D":12,"./GameObject":15}]},{},[8]);
+},{"../lib/Vector2D":13,"./GameObject":16}]},{},[9]);
