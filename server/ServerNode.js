@@ -6,7 +6,7 @@ var Vector2D = require('../lib/Vector2D');
 var Globals = require('../lib/Globals');
 
 class ServerNode extends Node {
-	constructor(ownerID, velocity, position, parent, children, radius = 50, health = 100, color = "red", outlineColor = "black") {
+	constructor(ownerID, velocity, position, parent, children, radius = 50, health = 100, color = "red", outlineColor = 'rgba(80,80,80,1)') {
 		super(position, parent, children, radius, health, color, outlineColor);
 		Collidable.call(this);
 		var _children = [];

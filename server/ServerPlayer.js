@@ -105,7 +105,7 @@ class ServerPlayer extends Player {
 
 			node = new ServerNode(this.id, new Vector2D(0,0), position, this.selectedNode, []);
 			this.selectedNode.addChild(node);
-			this.selectedNode.outlineColor = "black";
+			this.selectedNode.outlineColor = 'rgba(80,80,80,1)';
 			this.selectedNode = null;
 		}
 		this.baseSize += node.getTreeSize();

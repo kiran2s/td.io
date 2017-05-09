@@ -15,6 +15,7 @@ class Node extends GameObject{
 		this.children = children; 
 		this.maxChildren = maxChildren;
 		this.maxLengthToChildren = maxLengthToChildren;
+		this.minLengthToChildren = minLengthToChildren;
 		if (parent === null) this.distanceFromRoot = 0;
 		else this.distanceFromRoot = parent.distanceFromRoot + 1;
 	}

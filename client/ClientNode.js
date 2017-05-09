@@ -30,7 +30,7 @@ class ClientNode extends Node{
 			ctx.beginPath();
         	ctx.moveTo(this.position.x, this.position.y);
 			ctx.lineTo(this.children[i].position.x, this.children[i].position.y);
-			ctx.strokeStyle = "black";
+			ctx.strokeStyle = 'rgba(80,80,80,1)';
 			ctx.stroke();
 			this.children[i].draw(ctx, transformToCameraCoords);
 		}
@@ -41,7 +41,7 @@ class ClientNode extends Node{
 		ctx.fillStyle = this.color;
 		ctx.fill();
 		ctx.strokeStyle = this.outlineColor;
-		ctx.lineWidth = 2;
+		ctx.lineWidth = 3;
 		ctx.stroke();
 
 		this.healthBar.update(this.health);

@@ -30,6 +30,7 @@ class ClientGameState extends GameState {
 		};
 
 		this.drawBackground(ctx, transformToCameraCoords);
+		otherPlayers.map(function(otherPlayer) { otherPlayer.draw(ctx, transformToCameraCoords); });
 		this.player.draw(
 			ctx,
 			function() {
@@ -37,9 +38,9 @@ class ClientGameState extends GameState {
 			},
 			transformToCameraCoords
 		);
-		otherPlayers.map(function(otherPlayer) { otherPlayer.draw(ctx, transformToCameraCoords); });
 		bullets.map(function(bullet) { bullet.draw(ctx, transformToCameraCoords); });
 		collectibles.map(function(collectible) { collectible.draw(ctx, transformToCameraCoords); });
+		
 	}
 
 	setPlayerProperties(playerUpdateProperties) {

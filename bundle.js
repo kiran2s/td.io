@@ -550,6 +550,7 @@ class ClientGameState extends GameState {
 		};
 
 		this.drawBackground(ctx, transformToCameraCoords);
+		otherPlayers.map(function(otherPlayer) { otherPlayer.draw(ctx, transformToCameraCoords); });
 		this.player.draw(
 			ctx,
 			function() {
@@ -557,9 +558,9 @@ class ClientGameState extends GameState {
 			},
 			transformToCameraCoords
 		);
-		otherPlayers.map(function(otherPlayer) { otherPlayer.draw(ctx, transformToCameraCoords); });
 		bullets.map(function(bullet) { bullet.draw(ctx, transformToCameraCoords); });
 		collectibles.map(function(collectible) { collectible.draw(ctx, transformToCameraCoords); });
+		
 	}
 
 	setPlayerProperties(playerUpdateProperties) {
@@ -617,7 +618,7 @@ class ClientNode extends Node{
 			ctx.beginPath();
         	ctx.moveTo(this.position.x, this.position.y);
 			ctx.lineTo(this.children[i].position.x, this.children[i].position.y);
-			ctx.strokeStyle = "black";
+			ctx.strokeStyle = 'rgba(80,80,80,1)';
 			ctx.stroke();
 			this.children[i].draw(ctx, transformToCameraCoords);
 		}
@@ -628,7 +629,7 @@ class ClientNode extends Node{
 		ctx.fillStyle = this.color;
 		ctx.fill();
 		ctx.strokeStyle = this.outlineColor;
-		ctx.lineWidth = 2;
+		ctx.lineWidth = 3;
 		ctx.stroke();
 
 		this.healthBar.update(this.health);
@@ -1465,6 +1466,7 @@ class Node extends GameObject{
 		this.children = children; 
 		this.maxChildren = maxChildren;
 		this.maxLengthToChildren = maxLengthToChildren;
+		this.minLengthToChildren = minLengthToChildren;
 		if (parent === null) this.distanceFromRoot = 0;
 		else this.distanceFromRoot = parent.distanceFromRoot + 1;
 	}
