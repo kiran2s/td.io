@@ -40,7 +40,6 @@ class ClientGameState extends GameState {
 		);
 		bullets.map(function(bullet) { bullet.draw(ctx, transformToCameraCoords); });
 		collectibles.map(function(collectible) { collectible.draw(ctx, transformToCameraCoords); });
-		
 	}
 
 	setPlayerProperties(playerUpdateProperties) {
