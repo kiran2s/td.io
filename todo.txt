@@ -14,11 +14,32 @@
 - Client prediction for bullets
 	- Move bullets to Weapon class
 
-- Base - more improvements
+- Base 
+	IDEAS
+		-node improvements
+			-BOOSTERS: allow nodes to spin on the "axis" of their parent
+			-GUNS: either uni-directional or "heat-seeking"
+				-gun improvements
+			-EVIL MINIONS: pump out AI minions
+			-COLLECT: able to harvest collectibles
+			-DEFENSE: make harder to destroy.
+			-SPIKES: damage player upon collision
+			-RESPAWN (mother node): allow player to respawn 
+
 - refactor input processing
 - Minimap
 - Inventory
 - Player Attributes
+	IDEAS
+		-player improvements
+			-MOVE BASE: ability to relocate entire base
+			-GUNS: either uni-directional or "heat-seeking"
+				-gun improvements
+			-SPIKES: damage player/base upon collision
+			-SPEED
+			-BOOST
+	  		(and other diep-like upgrades)
+
 - Leaderboard
 - Indicator if base being attacked
 

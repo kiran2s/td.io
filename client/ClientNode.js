@@ -31,6 +31,7 @@ class ClientNode extends Node{
         	ctx.moveTo(this.position.x, this.position.y);
 			ctx.lineTo(this.children[i].position.x, this.children[i].position.y);
 			ctx.strokeStyle = 'rgba(80,80,80,1)';
+			ctx.lineWidth = 3;
 			ctx.stroke();
 			this.children[i].draw(ctx, transformToCameraCoords);
 		}
