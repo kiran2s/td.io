@@ -19,7 +19,7 @@ function Collidable() {
 	this.takeDamage = function(dmgAmt) {
 		if (this.hasOwnProperty("health")) {
 			this.health -= dmgAmt;
-			console.log("Object took "+dmgAmt+ " damage. Object now has " + this.health + " health");
+			//console.log("Object took "+dmgAmt+ " damage. Object now has " + this.health + " health");
 		}
 	}
 

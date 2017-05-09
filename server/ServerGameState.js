@@ -120,7 +120,7 @@ class ServerGameState extends GameState {
 			this.addBullet(uuid(), player);
 		}
 
-		if (input.isSpaceClicked) {
+		if (input.isMouseRightButtonClicked) {
 			let nodeRange ={
        				x: input.mousePosition.x-50,
         			y: input.mousePosition.y-50,

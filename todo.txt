@@ -14,7 +14,8 @@
 - Client prediction for bullets
 	- Move bullets to Weapon class
 
-- Base
+- Base - more improvements
+- refactor input processing
 - Minimap
 - Inventory
 - Player Attributes

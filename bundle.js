@@ -47,7 +47,7 @@ class Client {
 		
 		this.keyboard = new KeyboardState();
 		this.mouse = new MouseState();
-		this.prevIsSpacePressed = false;
+		this.prevIsRightButtonDown = false;
 
 		document.ondragstart = function(event) { return false };
 		
@@ -137,9 +137,9 @@ class Client {
 		let mouseDirection = new Vector2D(this.mouse.x, this.mouse.y).sub(new Vector2D(this.gamestate.canvasPlayerPosition.x, this.gamestate.canvasPlayerPosition.y));
 		let mousePosition = new Vector2D(this.gamestate.player.position.x, this.gamestate.player.position.y).add(mouseDirection);
 		
-		let isSpaceClicked = false;
-		if (this.prevIsSpacePressed && !this.keyboard.pressed('space')) isSpaceClicked = true;
-		this.prevIsSpacePressed = this.keyboard.pressed('space');
+		let isRightButtonClicked = false;
+		if (this.prevIsRightButtonDown && !this.mouse.isRightButtonDown) isRightButtonClicked = true;
+		this.prevIsRightButtonDown = this.mouse.isRightButtonDown;
 
 		let inputUpdate = new InputUpdate(
 							++this.currentSequenceNumber, 
@@ -147,7 +147,7 @@ class Client {
 							mouseDirection,
 							mousePosition, 
 							this.mouse.isLeftButtonDown, 
-							isSpaceClicked,
+							isRightButtonClicked,
 							Date.now(), 
 							deltaTime
 						);
@@ -505,8 +505,8 @@ class ClientCollectible extends Collectible {
 		ctx.lineWidth = 3;
 		ctx.strokeRect(0, 0, this.size, this.size);
 
+		this.healthBar.update(this.health);
 		if (this.health < 100.0) {
-			this.healthBar.update(this.health);
 			transformToCameraCoords();
 			ctx.transform(1, 0, 0, 1, this.position.x, this.position.y); //unrounded
 			//ctx.transform(1, 0, 0, 1, ~~(0.5 + this.position.x), ~~(0.5 + this.position.y)); //rounded
@@ -1433,13 +1433,13 @@ module.exports = GameState;
 'use strict';
 
 class InputUpdate {
-    constructor(sequenceNumber, keysPressed, mouseDirection, mousePosition, isMouseLeftButtonDown, isSpaceClicked, timestamp, deltaTime) {
+    constructor(sequenceNumber, keysPressed, mouseDirection, mousePosition, isMouseLeftButtonDown, isMouseRightButtonClicked, timestamp, deltaTime) {
         this.sequenceNumber = sequenceNumber;
         this.keysPressed = keysPressed;
         this.mouseDirection = mouseDirection;
         this.mousePosition = mousePosition;
         this.isMouseLeftButtonDown = isMouseLeftButtonDown;
-        this.isSpaceClicked = isSpaceClicked;
+        this.isMouseRightButtonClicked = isMouseRightButtonClicked;
         this.timestamp = timestamp;
         this.deltaTime = deltaTime;
     }
@@ -1454,7 +1454,7 @@ var GameObject = require('./GameObject');
 var uuid = require('node-uuid');
 
 class Node extends GameObject{
-	constructor(position, parent, children, radius, health, color, outlineColor, id = uuid(), maxChildren = 3, maxLengthToChildren = 200) {
+	constructor(position, parent, children, radius, health, color, outlineColor, id = uuid(), maxChildren = 3, maxLengthToChildren = 500, minLengthToChildren = 0) {
 		super(position, radius*2, color);
 		this.radius = radius; 
 		this.id = id;

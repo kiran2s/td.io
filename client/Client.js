@@ -46,7 +46,7 @@ class Client {
 		
 		this.keyboard = new KeyboardState();
 		this.mouse = new MouseState();
-		this.prevIsSpacePressed = false;
+		this.prevIsRightButtonDown = false;
 
 		document.ondragstart = function(event) { return false };
 		
@@ -136,9 +136,9 @@ class Client {
 		let mouseDirection = new Vector2D(this.mouse.x, this.mouse.y).sub(new Vector2D(this.gamestate.canvasPlayerPosition.x, this.gamestate.canvasPlayerPosition.y));
 		let mousePosition = new Vector2D(this.gamestate.player.position.x, this.gamestate.player.position.y).add(mouseDirection);
 		
-		let isSpaceClicked = false;
-		if (this.prevIsSpacePressed && !this.keyboard.pressed('space')) isSpaceClicked = true;
-		this.prevIsSpacePressed = this.keyboard.pressed('space');
+		let isRightButtonClicked = false;
+		if (this.prevIsRightButtonDown && !this.mouse.isRightButtonDown) isRightButtonClicked = true;
+		this.prevIsRightButtonDown = this.mouse.isRightButtonDown;
 
 		let inputUpdate = new InputUpdate(
 							++this.currentSequenceNumber, 
@@ -146,7 +146,7 @@ class Client {
 							mouseDirection,
 							mousePosition, 
 							this.mouse.isLeftButtonDown, 
-							isSpaceClicked,
+							isRightButtonClicked,
 							Date.now(), 
 							deltaTime
 						);
