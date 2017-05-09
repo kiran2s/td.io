@@ -5,6 +5,7 @@ var uuid = require('node-uuid');
 var GameState = require('../shared/GameState');
 var ServerPlayer = require('./ServerPlayer');
 var ServerCollectible = require('./ServerCollectible');
+var ServerNode = require('./ServerNode');
 var Vector2D = require('../lib/Vector2D');
 var SpatialHash = require('spatial-hash');
 var Globals = require('../lib/Globals');
@@ -48,9 +49,29 @@ class ServerGameState extends GameState {
 		}
 	}
 
+	addNode(position, player){
+		let node = player.buildNode(position);
+		if (node !== null)
+			this.spatialHash.insert(node);
+	}
+
+	deleteBranch(node, playerID){
+		this._deleteBranch(node);
+		this.players[playerID].deleteBranch(node);
+		
+	}
+
+	_deleteBranch(node){
+		this.spatialHash.remove(node);
+		for (var i =0; i<node.children.length; i++){
+			this._deleteBranch(node.children[i]);
+		}
+	}
+
 	deleteBullet(id) {
 		this.deleteGameObject(this.bullets, id);
 	}
+
 
 	addCollectible(id, x, y) {
 		let collectible = new ServerCollectible(id, new Vector2D(x, y));
@@ -96,7 +117,38 @@ class ServerGameState extends GameState {
 
 		// Fire bullets
 		if (input.isMouseLeftButtonDown) {
-			this.addBullet(uuid(), player)
+			this.addBullet(uuid(), player);
+		}
+
+		if (input.isSpaceClicked) {
+			let nodeRange ={
+       				x: input.mousePosition.x-50,
+        			y: input.mousePosition.y-50,
+        			width: 100,
+        			height: 100
+    		}
+    		let nodeIntersectList = this.spatialHash.query(nodeRange, function(item) { return item.constructor.name === 'ServerNode'; });
+			
+			let cursorRange ={
+       				x: input.mousePosition.x,
+        			y: input.mousePosition.y,
+        			width: 1,
+        			height: 1
+    		}
+    		let cursorIntersectList = this.spatialHash.query(cursorRange, function(item) { return (item.constructor.name === 'ServerNode' && item.ownerID === player.id); });
+			
+			if (cursorIntersectList.length > 0){
+				if (player.selectedNode === cursorIntersectList[0])
+					player.setSelectedNode(null);
+				else player.setSelectedNode(cursorIntersectList[0]);
+			}
+
+			else if (nodeIntersectList.length === 0){
+				if (player.base === null)
+					this.addNode(new Vector2D(input.mousePosition.x, input.mousePosition.y), player);
+				else if (player.selectedNode !== null)
+					this.addNode(new Vector2D(input.mousePosition.x, input.mousePosition.y), player);
+			}
 		}
 	}
 
@@ -156,6 +208,25 @@ class ServerGameState extends GameState {
 		);
 
 		this._detectCollisions(
+			this.bullets, 
+			'ServerNode', 
+			function(bullet, node) {
+				if (bullet.ownerID === node.ownerID){
+					return;
+				}
+				let damageFormula = 0.1*(bullet.damage / Math.log2(1+this.players[node.ownerID].baseSize) / Math.log2(1+node.getTreeSize()) + node.distanceFromRoot);
+				if (node.parent===null) node.takeDamage(0.5*damageFormula);
+				else node.takeDamage(damageFormula); //formula for base damage
+				if (node.health <= 0) {
+					this.deleteBranch(node, node.ownerID);
+				}
+				else {
+					this.deleteBullet(bullet.id);
+				}
+			}.bind(this)
+		);
+
+		this._detectCollisions(
 			this.players,
 			'ServerBullet',
 			function(player, bullet) {
@@ -210,6 +281,17 @@ class ServerGameState extends GameState {
 				b1.bucketsY[0] !== b2.bucketsY[0] ||
 				b1.bucketsY[1] !== b2.bucketsY[1];
 	}
+
+	// cellContents(x,y,selector){
+	// 	let i = ~~((y-this.spatialHash.range.y) / this.cellSize)
+ //        let j = ~~((x-this.spatialHash.range.x) / this.cellSize)
+ //        let selected = [];
+ //        let contents = this.hash[i][j];
+ //        for (var k=0; k<contents.length; k++)
+ //        	if selector(contents[k])
+ //        		selected.push(contents[k]);
+ //        return selected;
+ //    }
 }
 
 module.exports = ServerGameState;

@@ -3,6 +3,7 @@
 var Player = require('../shared/Player');
 var Collidable = require('./Collidable');
 var ServerWeaponFactory = require('./ServerWeapon').ServerWeaponFactory;
+var ServerNode = require('./ServerNode');
 var Vector2D = require('../lib/Vector2D');
 var Globals = require('../lib/Globals');
 
@@ -25,9 +26,16 @@ class ServerPlayer extends Player {
 
 		this.weapon = ServerWeaponFactory.makePlebPistol(this.radius);
 		this.damage = 100;
+		this.base = null; 
+		this.baseSize = 0;
+		this.selectedNode = null;
 	}
 
 	getUpdateProperties(liteVersion) {
+		var _base = null;
+		if (this.base === null) _base = null;
+		else _base = this.base.getUpdateProperties();
+
 		if (liteVersion) {
 			return {
 				position: this.position,
@@ -35,6 +43,7 @@ class ServerPlayer extends Player {
 				orientation: this.orientation,
 				health: this.health,
 				weapon: this.weapon.getUpdateProperties(),
+				base: _base,
 				color: this.color,
 				outlineColor: this.outlineColor
 			};
@@ -51,10 +60,12 @@ class ServerPlayer extends Player {
 				orientation: this.orientation,
 				health: this.health,
 				weapon: this.weapon.getUpdateProperties(),
+				base: _base,
 				color: this.color,
 				outlineColor: this.outlineColor
 			};
 		}
+
 	}
 
 	update(deltaTime, keysPressed, mouseDirection) {
@@ -76,10 +87,52 @@ class ServerPlayer extends Player {
 			}
 		}
 		this.updateRange();
-
 		return retval;
 	}
-	
+
+	buildNode(position){
+		var node = new ServerNode(this.id, new Vector2D(0,0), position, null, []);
+		if (this.base === null){
+			this.base = node; 
+			this.base.color = "blue";
+		}
+		if (this.selectedNode !== null ){
+			let dist = new Vector2D().copy(this.selectedNode.position).sub(position).getLength(); 
+			if (this.selectedNode.maxChildren === this.selectedNode.children.length ||
+				dist > this.selectedNode.maxLengthToChildren ||
+				dist < this.selectedNode.minLengthToChildren)
+				return null; //cannot build 
+
+			node = new ServerNode(this.id, new Vector2D(0,0), position, this.selectedNode, []);
+			this.selectedNode.addChild(node);
+			this.selectedNode.outlineColor = "black";
+			this.selectedNode = null;
+		}
+		this.baseSize += node.getTreeSize();
+		
+		//console.log(this.baseSize);
+		return node;
+	}
+
+	deleteBranch(node){
+		if (this.base === node) this.base = null;
+		else node.delete();
+		this.baseSize -= node.getTreeSize();
+		//console.log(this.baseSize);
+	}
+
+	setSelectedNode(node){
+		if (this.selectedNode !== null){
+				this.selectedNode.outlineColor = "black";
+				this.selectedNode = null;
+		}
+		//var node = this.findNode(this.base, this.selectedNodeID);
+		if (node !== null){
+			node.outlineColor = "yellow";
+			this.selectedNode = node;
+		}
+	}
+
 	fireWeapon(id) {
 		return this.weapon.fire(id, this.id, this.orientation, this.position);
 	}

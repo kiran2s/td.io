@@ -10,8 +10,8 @@ class ClientGameState extends GameState {
         super(worldWidth, worldHeight);
 
 		this.player = new ClientPlayer(playerUpdateProperties);
-
 		this.canvas = document.getElementById('canvas');
+		this.canvasPlayerPosition = new Vector2D(this.canvas.width/2, this.canvas.height/2);
 		document.getElementById("grid").draggable = false;
 		this.grid = document.getElementById("grid");
     }
@@ -19,10 +19,11 @@ class ClientGameState extends GameState {
 	draw(ctx, otherPlayers, bullets, collectibles) {
 		let playerPosition = this.player.position;
 		let canvas = this.canvas;
+		let canvasPlayerPosition = this.canvasPlayerPosition;
 		let transformToCameraCoords = function() {
 			ctx.setTransform(1, 0, 0, 1, 
-				canvas.width/2 - playerPosition.x, //unrounded
-				canvas.height/2 - playerPosition.y //unrounded
+				canvasPlayerPosition.x - playerPosition.x, //unrounded
+				canvasPlayerPosition.y - playerPosition.y //unrounded
 				//canvas.width/2 - ~~(0.5 + playerPosition.x), //rounded
 				//canvas.height/2 - ~~(0.5 + playerPosition.y) //rounded
 			);
@@ -32,8 +33,9 @@ class ClientGameState extends GameState {
 		this.player.draw(
 			ctx,
 			function() {
-				ctx.setTransform(1, 0, 0, 1, canvas.width/2, canvas.height/2);
-			}
+				ctx.setTransform(1, 0, 0, 1, canvasPlayerPosition.x, canvasPlayerPosition.y);
+			},
+			transformToCameraCoords
 		);
 		otherPlayers.map(function(otherPlayer) { otherPlayer.draw(ctx, transformToCameraCoords); });
 		bullets.map(function(bullet) { bullet.draw(ctx, transformToCameraCoords); });

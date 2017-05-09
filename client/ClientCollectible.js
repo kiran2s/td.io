@@ -27,8 +27,8 @@ class ClientCollectible extends Collectible {
 		ctx.lineWidth = 3;
 		ctx.strokeRect(0, 0, this.size, this.size);
 
-		if (this.health < 100) {
-			this.healthBar.update(this.health);
+		this.healthBar.update(this.health);
+		if (this.health < 100.0) {
 			transformToCameraCoords();
 			ctx.transform(1, 0, 0, 1, this.position.x, this.position.y); //unrounded
 			//ctx.transform(1, 0, 0, 1, ~~(0.5 + this.position.x), ~~(0.5 + this.position.y)); //rounded

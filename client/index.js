@@ -1,4 +1,4 @@
 'use strict';
 
 var Client = require('./Client');
-new Client().run();
+new Client();

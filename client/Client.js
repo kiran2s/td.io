@@ -28,7 +28,7 @@ class Client {
 		this.gamestateReceived = false;		
 		this.socket = io();
 
-		this.socket.on('init', this.handleInitFromServer.bind(this));
+		this.socket.once('init', this.handleInitFromServer.bind(this));
 		this.socket.on('update', this.handleUpdateFromServer.bind(this));
 		
 		this.canvas = document.getElementById('canvas');
@@ -46,6 +46,7 @@ class Client {
 		
 		this.keyboard = new KeyboardState();
 		this.mouse = new MouseState();
+		this.prevIsSpacePressed = false;
 
 		document.ondragstart = function(event) { return false };
 		
@@ -64,6 +65,7 @@ class Client {
 		this.currentSequenceNumber = data.gameStateUpdate.sequenceNumber;
 		this.gamestate = new ClientGameState(data.worldWidth, data.worldHeight, data.gameStateUpdate.player);
 		this.gamestateReceived = true;
+		this.run();
 	}
 
 	handleUpdateFromServer(gameStateUpdate) {
@@ -87,19 +89,18 @@ class Client {
 			this.inputUpdates.splice(0, discardIndex + 1);
 			
 			//block MOVED from updateGameState() -- want to apply inputs to server update immediately, only once.
-			if (this.gamestate !== null) {
-				if (!(this.ID in this.gameStateUpdates[this.gameStateUpdates.length-1].otherPlayers))
-					this.gamestate=null;
-				else {
-					this.gamestate.setPlayerProperties(this.gameStateUpdates[this.gameStateUpdates.length-1].player);
-					for (let i = 0; i < this.inputUpdates.length; i++) {
-						this.gamestate.updatePlayer(
-							this.inputUpdates[i],
-							this.inputUpdates[i].deltaTime
-						);
-					}
+			if (!(this.ID in this.gameStateUpdates[this.gameStateUpdates.length-1].otherPlayers))
+				this.gamestate=null;
+			else {
+				this.gamestate.setPlayerProperties(this.gameStateUpdates[this.gameStateUpdates.length-1].player);
+				for (let i = 0; i < this.inputUpdates.length; i++) {
+					this.gamestate.updatePlayer(
+						this.inputUpdates[i],
+						this.inputUpdates[i].deltaTime
+					);
 				}
 			}
+			
 		}
 	}
 	
@@ -131,13 +132,20 @@ class Client {
 			keys['space'] = true;
 		}
 		
-		let mouseDirection = new Vector2D(this.mouse.x, this.mouse.y).sub(new Vector2D(this.canvas.width/2, this.canvas.height/2));
+		let mouseDirection = new Vector2D(this.mouse.x, this.mouse.y).sub(new Vector2D(this.gamestate.canvasPlayerPosition.x, this.gamestate.canvasPlayerPosition.y));
+		let mousePosition = new Vector2D(this.gamestate.player.position.x, this.gamestate.player.position.y).add(mouseDirection);
+		
+		let isSpaceClicked = false;
+		if (this.prevIsSpacePressed && !this.keyboard.pressed('space')) isSpaceClicked = true;
+		this.prevIsSpacePressed = this.keyboard.pressed('space');
 
 		let inputUpdate = new InputUpdate(
 							++this.currentSequenceNumber, 
 							keys, 
-							mouseDirection, 
+							mouseDirection,
+							mousePosition, 
 							this.mouse.isLeftButtonDown, 
+							isSpaceClicked,
 							Date.now(), 
 							deltaTime
 						);
@@ -248,7 +256,8 @@ class Client {
 							otherPlayer.size, 
 							otherPlayer.orientation, 
 							otherPlayer.health, 
-							otherPlayer.weapon, 
+							otherPlayer.weapon,
+							otherPlayer.base, 
 							otherPlayer.color, 
 							otherPlayer.outlineColor
 						)
@@ -320,6 +329,7 @@ class Client {
 							interpOrientation, 
 							otherPlayer_2.health, 
 							otherPlayer_2.weapon, 
+							otherPlayer_2.base,
 							otherPlayer_2.color, 
 							otherPlayer_2.outlineColor
 						)

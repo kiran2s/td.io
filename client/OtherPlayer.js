@@ -2,11 +2,12 @@
 
 var GameObject = require('../shared/GameObject');
 var ClientWeapon = require('./ClientWeapon');
+var ClientNode = require('./ClientNode');
 var HealthBar = require('./HealthBar');
 var Vector2D = require('../lib/Vector2D');
 
 class OtherPlayer extends GameObject {
-    constructor(position, size, orientation, health, weapon, color, outlineColor) {
+    constructor(position, size, orientation, health, weapon, base, color, outlineColor) {
         super(position, size, color);
 
         this.radius = this.size/2;
@@ -14,11 +15,16 @@ class OtherPlayer extends GameObject {
         this.health = health;
         this.weapon = new ClientWeapon(weapon.name, weapon.distanceFromPlayer, weapon.size, weapon.color, weapon.outlineColor);
         this.outlineColor = outlineColor;
-
-        this.healthBar = new HealthBar(new Vector2D(0, this.radius + 12), this.radius * 2.5);
+        if (base !== null)
+			this.base = new ClientNode(base.position, null, base.children, base.radius, base.health, base.color, base.outlineColor);
+		else this.base = null;
+		this.healthBar = new HealthBar(new Vector2D(0, this.radius + 12), this.radius * 2.5);
     }
 
 	draw(ctx, transformToCameraCoords) {
+		if (this.base !== null)
+			this.base.draw(ctx, transformToCameraCoords);
+
 		transformToCameraCoords();
 		ctx.beginPath();
 		ctx.arc(this.position.x, this.position.y, this.radius, 0, 2*Math.PI);
