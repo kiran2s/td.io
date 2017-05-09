@@ -155,7 +155,7 @@ class ServerGameState extends GameState {
 			player.selectedNode !== null && 
 			player.selectedNode.isHealthy())
 				this.deleteBranch(player.selectedNode, player.id);
-		}
+		
 	}
 
 	updateGameObjects(gameObjects, deltaTime) {
