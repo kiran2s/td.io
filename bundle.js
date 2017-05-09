@@ -48,6 +48,10 @@ class Client {
 		this.keyboard = new KeyboardState();
 		this.mouse = new MouseState();
 		this.prevIsRightButtonDown = false;
+		this.prevKeysPressed = {};
+		// for (let i=0; i<KEYBOARD_INPUTS.length; i++){
+		// 	this.prevKeysPressed[KEYBOARD_INPUTS[i]] = false;
+		// }
 
 		document.ondragstart = function(event) { return false };
 		
@@ -111,47 +115,7 @@ class Client {
 		let deltaTime = (currTime - this.prevTime) / 1000;
 		this.prevTime = currTime;
 
-		let keys = { numDirKeysPressed: 0 };
-		let dirKeys = "WASD";
-		for (let i = 0; i < dirKeys.length; i++) {
-			let currKey = dirKeys[i];
-			if (this.keyboard.pressed(currKey)) {
-				keys[currKey] = true;
-				keys.numDirKeysPressed++;
-			}
-		}
-		let numKeys = "123";
-		for (let i = 0; i < numKeys.length; i++) {
-			let currKey = numKeys[i];
-			if (this.keyboard.pressed(currKey)) {
-				keys[currKey] = true;
-			}
-		}
-		if (this.keyboard.pressed('F')) {
-			keys['F'] = true;
-		}
-		if (this.keyboard.pressed('space')) {
-			keys['space'] = true;
-		}
-		
-		let mouseDirection = new Vector2D(this.mouse.x, this.mouse.y).sub(new Vector2D(this.gamestate.canvasPlayerPosition.x, this.gamestate.canvasPlayerPosition.y));
-		let mousePosition = new Vector2D(this.gamestate.player.position.x, this.gamestate.player.position.y).add(mouseDirection);
-		
-		let isRightButtonClicked = false;
-		if (this.prevIsRightButtonDown && !this.mouse.isRightButtonDown) isRightButtonClicked = true;
-		this.prevIsRightButtonDown = this.mouse.isRightButtonDown;
-
-		let inputUpdate = new InputUpdate(
-							++this.currentSequenceNumber, 
-							keys, 
-							mouseDirection,
-							mousePosition, 
-							this.mouse.isLeftButtonDown, 
-							isRightButtonClicked,
-							Date.now(), 
-							deltaTime
-						);
-
+		let inputUpdate = this.getInput(deltaTime);
 		this.inputUpdates.push(inputUpdate);
 		this.socket.emit('update', inputUpdate);
 
@@ -444,6 +408,60 @@ class Client {
 		this.canvas.width = window.innerWidth;
 		this.canvas.height = window.innerHeight;
 	}
+
+	getInput(deltaTime){
+		let keys = { numDirKeysPressed: 0 };
+		let dirKeys = "WASD";
+		for (let i = 0; i < dirKeys.length; i++) {
+			let currKey = dirKeys[i];
+			if (this.keyboard.pressed(currKey)) {
+				keys[currKey] = true;
+				keys.numDirKeysPressed++;
+			}
+		}
+		let numKeys = "123";
+		for (let i = 0; i < numKeys.length; i++) {
+			let currKey = numKeys[i];
+			if (this.keyboard.pressed(currKey)) {
+				keys[currKey] = true;
+			}
+		}
+		if (this.keyboard.pressed('F')) {
+			keys['F'] = true;
+		}
+		if (this.keyboard.pressed('space')) {
+			keys['space'] = true;
+		}
+
+		let keysClicked = {};  //get keysClicked
+		for (let i in this.prevKeysPressed){
+			if (this.prevKeysPressed[i] === true &&
+				keys[i] !== true)
+				keysClicked[i] = true;
+		}
+
+		this.prevKeysPressed = Globals.clone(keys);
+
+		let mouseDirection = new Vector2D(this.mouse.x, this.mouse.y).sub(new Vector2D(this.gamestate.canvasPlayerPosition.x, this.gamestate.canvasPlayerPosition.y));
+		let mousePosition = new Vector2D(this.gamestate.player.position.x, this.gamestate.player.position.y).add(mouseDirection);
+		
+		let isRightButtonClicked = false;
+		if (this.prevIsRightButtonDown && !this.mouse.isRightButtonDown) isRightButtonClicked = true;
+		this.prevIsRightButtonDown = this.mouse.isRightButtonDown;
+
+		let inputUpdate = new InputUpdate(
+							++this.currentSequenceNumber, 
+							keys, 
+							keysClicked,
+							mouseDirection,
+							mousePosition, 
+							this.mouse.isLeftButtonDown, 
+							isRightButtonClicked,
+							Date.now(), 
+							deltaTime
+						);
+		return inputUpdate;
+	}
 }
 
 module.exports = Client;
@@ -560,7 +578,6 @@ class ClientGameState extends GameState {
 		);
 		bullets.map(function(bullet) { bullet.draw(ctx, transformToCameraCoords); });
 		collectibles.map(function(collectible) { collectible.draw(ctx, transformToCameraCoords); });
-		
 	}
 
 	setPlayerProperties(playerUpdateProperties) {
@@ -858,10 +875,20 @@ module.exports = {
     DEGREES_360: 2*Math.PI,
     WORLD_WIDTH: 4000,
     WORLD_HEIGHT: 4000,
-    
+
+
     areObjectsSame: function(o1, o2) {
         return JSON.stringify(o1) === JSON.stringify(o2);
-    }
+    },
+
+    clone: function(obj) {
+	    if (null == obj || "object" != typeof obj) return obj;
+	    var copy = obj.constructor();
+	    for (var attr in obj) {
+	        if (obj.hasOwnProperty(attr)) copy[attr] = this.clone(obj[attr]);
+	    }
+	    return copy;
+	}
 };
 
 },{}],12:[function(require,module,exports){
@@ -1434,9 +1461,10 @@ module.exports = GameState;
 'use strict';
 
 class InputUpdate {
-    constructor(sequenceNumber, keysPressed, mouseDirection, mousePosition, isMouseLeftButtonDown, isMouseRightButtonClicked, timestamp, deltaTime) {
+    constructor(sequenceNumber, keysPressed, keysClicked, mouseDirection, mousePosition, isMouseLeftButtonDown, isMouseRightButtonClicked, timestamp, deltaTime) {
         this.sequenceNumber = sequenceNumber;
         this.keysPressed = keysPressed;
+        this.keysClicked = keysClicked;
         this.mouseDirection = mouseDirection;
         this.mousePosition = mousePosition;
         this.isMouseLeftButtonDown = isMouseLeftButtonDown;
@@ -1490,6 +1518,14 @@ class Node extends GameObject{
 			size += this.children[i].getTreeSize();
 		}
 		return size;
+	}
+
+	isHealthy(){
+		for (let i = 0; i<this.children.length; i++){
+			if (this.children[i].isHealthy() === false)
+				return false;
+		}
+		return this.health === 100;
 	}
 
 	// findNode(rt, id){

@@ -41,6 +41,14 @@ class Node extends GameObject{
 		return size;
 	}
 
+	isHealthy(){
+		for (let i = 0; i<this.children.length; i++){
+			if (this.children[i].isHealthy() === false)
+				return false;
+		}
+		return this.health === 100;
+	}
+
 	// findNode(rt, id){
 	// 	if (rt.id === id) return rt;
 	// 	for (var i = 0; i < rt.children.length; i++){

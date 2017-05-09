@@ -47,6 +47,10 @@ class Client {
 		this.keyboard = new KeyboardState();
 		this.mouse = new MouseState();
 		this.prevIsRightButtonDown = false;
+		this.prevKeysPressed = {};
+		// for (let i=0; i<KEYBOARD_INPUTS.length; i++){
+		// 	this.prevKeysPressed[KEYBOARD_INPUTS[i]] = false;
+		// }
 
 		document.ondragstart = function(event) { return false };
 		
@@ -110,47 +114,7 @@ class Client {
 		let deltaTime = (currTime - this.prevTime) / 1000;
 		this.prevTime = currTime;
 
-		let keys = { numDirKeysPressed: 0 };
-		let dirKeys = "WASD";
-		for (let i = 0; i < dirKeys.length; i++) {
-			let currKey = dirKeys[i];
-			if (this.keyboard.pressed(currKey)) {
-				keys[currKey] = true;
-				keys.numDirKeysPressed++;
-			}
-		}
-		let numKeys = "123";
-		for (let i = 0; i < numKeys.length; i++) {
-			let currKey = numKeys[i];
-			if (this.keyboard.pressed(currKey)) {
-				keys[currKey] = true;
-			}
-		}
-		if (this.keyboard.pressed('F')) {
-			keys['F'] = true;
-		}
-		if (this.keyboard.pressed('space')) {
-			keys['space'] = true;
-		}
-		
-		let mouseDirection = new Vector2D(this.mouse.x, this.mouse.y).sub(new Vector2D(this.gamestate.canvasPlayerPosition.x, this.gamestate.canvasPlayerPosition.y));
-		let mousePosition = new Vector2D(this.gamestate.player.position.x, this.gamestate.player.position.y).add(mouseDirection);
-		
-		let isRightButtonClicked = false;
-		if (this.prevIsRightButtonDown && !this.mouse.isRightButtonDown) isRightButtonClicked = true;
-		this.prevIsRightButtonDown = this.mouse.isRightButtonDown;
-
-		let inputUpdate = new InputUpdate(
-							++this.currentSequenceNumber, 
-							keys, 
-							mouseDirection,
-							mousePosition, 
-							this.mouse.isLeftButtonDown, 
-							isRightButtonClicked,
-							Date.now(), 
-							deltaTime
-						);
-
+		let inputUpdate = this.getInput(deltaTime);
 		this.inputUpdates.push(inputUpdate);
 		this.socket.emit('update', inputUpdate);
 
@@ -442,6 +406,60 @@ class Client {
 	onWindowResize(event) {
 		this.canvas.width = window.innerWidth;
 		this.canvas.height = window.innerHeight;
+	}
+
+	getInput(deltaTime){
+		let keys = { numDirKeysPressed: 0 };
+		let dirKeys = "WASD";
+		for (let i = 0; i < dirKeys.length; i++) {
+			let currKey = dirKeys[i];
+			if (this.keyboard.pressed(currKey)) {
+				keys[currKey] = true;
+				keys.numDirKeysPressed++;
+			}
+		}
+		let numKeys = "123";
+		for (let i = 0; i < numKeys.length; i++) {
+			let currKey = numKeys[i];
+			if (this.keyboard.pressed(currKey)) {
+				keys[currKey] = true;
+			}
+		}
+		if (this.keyboard.pressed('F')) {
+			keys['F'] = true;
+		}
+		if (this.keyboard.pressed('space')) {
+			keys['space'] = true;
+		}
+
+		let keysClicked = {};  //get keysClicked
+		for (let i in this.prevKeysPressed){
+			if (this.prevKeysPressed[i] === true &&
+				keys[i] !== true)
+				keysClicked[i] = true;
+		}
+
+		this.prevKeysPressed = Globals.clone(keys);
+
+		let mouseDirection = new Vector2D(this.mouse.x, this.mouse.y).sub(new Vector2D(this.gamestate.canvasPlayerPosition.x, this.gamestate.canvasPlayerPosition.y));
+		let mousePosition = new Vector2D(this.gamestate.player.position.x, this.gamestate.player.position.y).add(mouseDirection);
+		
+		let isRightButtonClicked = false;
+		if (this.prevIsRightButtonDown && !this.mouse.isRightButtonDown) isRightButtonClicked = true;
+		this.prevIsRightButtonDown = this.mouse.isRightButtonDown;
+
+		let inputUpdate = new InputUpdate(
+							++this.currentSequenceNumber, 
+							keys, 
+							keysClicked,
+							mouseDirection,
+							mousePosition, 
+							this.mouse.isLeftButtonDown, 
+							isRightButtonClicked,
+							Date.now(), 
+							deltaTime
+						);
+		return inputUpdate;
 	}
 }
 

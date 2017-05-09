@@ -150,6 +150,12 @@ class ServerGameState extends GameState {
 					this.addNode(new Vector2D(input.mousePosition.x, input.mousePosition.y), player);
 			}
 		}
+
+		if (input.keysClicked['F'] && 
+			player.selectedNode !== null && 
+			player.selectedNode.isHealthy())
+				this.deleteBranch(player.selectedNode, player.id);
+		}
 	}
 
 	updateGameObjects(gameObjects, deltaTime) {

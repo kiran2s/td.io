@@ -115,7 +115,10 @@ class ServerPlayer extends Player {
 	}
 
 	deleteBranch(node){
-		if (this.base === node) this.base = null;
+		if (this.base === node){
+			this.base = null;
+			this.selectedNode = null;
+		}
 		else node.delete();
 		this.baseSize -= node.getTreeSize();
 		//console.log(this.baseSize);
@@ -123,7 +126,7 @@ class ServerPlayer extends Player {
 
 	setSelectedNode(node){
 		if (this.selectedNode !== null){
-				this.selectedNode.outlineColor = "black";
+				this.selectedNode.outlineColor = 'rgba(80,80,80,1)';
 				this.selectedNode = null;
 		}
 		//var node = this.findNode(this.base, this.selectedNodeID);
