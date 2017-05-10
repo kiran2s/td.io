@@ -21107,8 +21107,6 @@ class Client {
 		this.gamestateReceived = false;		
 		this.socket = io();
 
-		this.connected = false;
-
 		this.socket.once('init', this.handleInitFromServer.bind(this));
 		this.socket.on('update', this.handleUpdateFromServer.bind(this));
 		
@@ -21152,7 +21150,6 @@ class Client {
 		this.gamestate = new ClientGameState(data.worldWidth, data.worldHeight, data.gameStateUpdate.player);
 		this.gamestateReceived = true;
 		this.run();
-		this.connected = true;
 	}
 
 	handleUpdateFromServer(gameStateUpdate) {
