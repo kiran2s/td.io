@@ -102,6 +102,7 @@ class Server {
 				
 		);
 
+		/*
 		socket.on(
 			'restart',
 			function() {
@@ -111,18 +112,21 @@ class Server {
 				}
 			}.bind(this)
 		);
+		*/
 
 		socket.on( //'disconnect' sent to server
 			'disconnect',
 			function() {
-				this.gamestate.deletePlayer(socket.id); //delete player from GameState
+				if (socket.id in this.gamestate.players) {
+					this.gamestate.deletePlayer(socket.id); //delete player from GameState
+				}
 				delete this.sockets[socket.id]; //delete SocketState
 				console.log('User disconnected: ' + socket.id);
 			}.bind(this)
 		);
 	}
 
-	updateGameState() { 
+	updateGameState() {
 		let currTime = Date.now();
 		let deltaTime = (currTime - this.prevTime) / 1000;
 		this.prevTime = currTime; 

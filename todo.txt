@@ -25,6 +25,8 @@
 			-DEFENSE: make harder to destroy.
 			-SPIKES: damage player upon collision
 			-RESPAWN (mother node): allow player to respawn 
+		- spawn player next to base upon death
+		- draw transparent node where actual node would be placed
 
 - refactor input processing
 - Minimap

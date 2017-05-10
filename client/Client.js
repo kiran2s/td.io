@@ -28,6 +28,8 @@ class Client {
 		this.gamestateReceived = false;		
 		this.socket = io();
 
+		this.connected = false;
+
 		this.socket.once('init', this.handleInitFromServer.bind(this));
 		this.socket.on('update', this.handleUpdateFromServer.bind(this));
 		
@@ -71,6 +73,7 @@ class Client {
 		this.gamestate = new ClientGameState(data.worldWidth, data.worldHeight, data.gameStateUpdate.player);
 		this.gamestateReceived = true;
 		this.run();
+		this.connected = true;
 	}
 
 	handleUpdateFromServer(gameStateUpdate) {
@@ -125,11 +128,13 @@ class Client {
 						inputUpdate.deltaTime
 			);
 		}
+		/*
 		else {
-			if (inputUpdate.isMouseLeftButtonDown || 'space' in keys) {
+			if (inputUpdate.isMouseLeftButtonDown || 'space' in inputUpdate.keysPressed) {
 				this.socket.emit('restart');
 			}
 		}
+		*/
 
 		updateAccumTime += Date.now() - currTime;
 		updateCount++;
@@ -152,9 +157,11 @@ class Client {
 				this.ctx.font = '100px Arial';
 				let msg = "YOU DEAD";
 				this.ctx.fillText(msg, this.canvas.width/2 - this.ctx.measureText(msg).width/2, this.canvas.height/2);
+				/*
 				this.ctx.font = '32px Arial';
 				msg = "Press 'Space' or 'Left Mouse Button' to restart.";
 				this.ctx.fillText(msg, this.canvas.width/2 - this.ctx.measureText(msg).width/2, this.canvas.height - 40);
+				*/
 			}
 			window.requestAnimationFrame(this.draw.bind(this));
 			return;
@@ -192,6 +199,64 @@ class Client {
 		}
 
 		window.requestAnimationFrame(this.draw.bind(this));
+	}
+
+	getInput(deltaTime){
+		let keys = { numDirKeysPressed: 0 };
+		let dirKeys = "WASD";
+		for (let i = 0; i < dirKeys.length; i++) {
+			let currKey = dirKeys[i];
+			if (this.keyboard.pressed(currKey)) {
+				keys[currKey] = true;
+				keys.numDirKeysPressed++;
+			}
+		}
+		let numKeys = "123";
+		for (let i = 0; i < numKeys.length; i++) {
+			let currKey = numKeys[i];
+			if (this.keyboard.pressed(currKey)) {
+				keys[currKey] = true;
+			}
+		}
+		if (this.keyboard.pressed('F')) {
+			keys['F'] = true;
+		}
+		if (this.keyboard.pressed('space')) {
+			keys['space'] = true;
+		}
+
+		let keysClicked = {};  //get keysClicked
+		for (let i in this.prevKeysPressed){
+			if (this.prevKeysPressed[i] === true &&
+				keys[i] !== true)
+				keysClicked[i] = true;
+		}
+
+		this.prevKeysPressed = Globals.clone(keys);
+
+		let mouseDirection = (this.gamestate !== null) ?
+			new Vector2D(this.mouse.x, this.mouse.y).sub(new Vector2D(this.gamestate.canvasPlayerPosition.x, this.gamestate.canvasPlayerPosition.y)) :
+			null;
+		let mousePosition = (this.gamestate !== null) ?
+			new Vector2D(this.gamestate.player.position.x, this.gamestate.player.position.y).add(mouseDirection) :
+			null;
+		
+		let isRightButtonClicked = false;
+		if (this.prevIsRightButtonDown && !this.mouse.isRightButtonDown) isRightButtonClicked = true;
+		this.prevIsRightButtonDown = this.mouse.isRightButtonDown;
+
+		let inputUpdate = new InputUpdate(
+							++this.currentSequenceNumber, 
+							keys, 
+							keysClicked,
+							mouseDirection,
+							mousePosition, 
+							this.mouse.isLeftButtonDown, 
+							isRightButtonClicked,
+							Date.now(), 
+							deltaTime
+						);
+		return inputUpdate;
 	}
 
 	// Linear interpolation
@@ -406,60 +471,6 @@ class Client {
 	onWindowResize(event) {
 		this.canvas.width = window.innerWidth;
 		this.canvas.height = window.innerHeight;
-	}
-
-	getInput(deltaTime){
-		let keys = { numDirKeysPressed: 0 };
-		let dirKeys = "WASD";
-		for (let i = 0; i < dirKeys.length; i++) {
-			let currKey = dirKeys[i];
-			if (this.keyboard.pressed(currKey)) {
-				keys[currKey] = true;
-				keys.numDirKeysPressed++;
-			}
-		}
-		let numKeys = "123";
-		for (let i = 0; i < numKeys.length; i++) {
-			let currKey = numKeys[i];
-			if (this.keyboard.pressed(currKey)) {
-				keys[currKey] = true;
-			}
-		}
-		if (this.keyboard.pressed('F')) {
-			keys['F'] = true;
-		}
-		if (this.keyboard.pressed('space')) {
-			keys['space'] = true;
-		}
-
-		let keysClicked = {};  //get keysClicked
-		for (let i in this.prevKeysPressed){
-			if (this.prevKeysPressed[i] === true &&
-				keys[i] !== true)
-				keysClicked[i] = true;
-		}
-
-		this.prevKeysPressed = Globals.clone(keys);
-
-		let mouseDirection = new Vector2D(this.mouse.x, this.mouse.y).sub(new Vector2D(this.gamestate.canvasPlayerPosition.x, this.gamestate.canvasPlayerPosition.y));
-		let mousePosition = new Vector2D(this.gamestate.player.position.x, this.gamestate.player.position.y).add(mouseDirection);
-		
-		let isRightButtonClicked = false;
-		if (this.prevIsRightButtonDown && !this.mouse.isRightButtonDown) isRightButtonClicked = true;
-		this.prevIsRightButtonDown = this.mouse.isRightButtonDown;
-
-		let inputUpdate = new InputUpdate(
-							++this.currentSequenceNumber, 
-							keys, 
-							keysClicked,
-							mouseDirection,
-							mousePosition, 
-							this.mouse.isLeftButtonDown, 
-							isRightButtonClicked,
-							Date.now(), 
-							deltaTime
-						);
-		return inputUpdate;
 	}
 }
 
