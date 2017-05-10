@@ -38,6 +38,8 @@ class ServerGameState extends GameState {
 	}
 
 	deletePlayer(id) {
+		if (this.players[id].base !== null)
+			this.deleteBranch(this.players[id].base, id);
 		this.deleteGameObject(this.players, id);
 	}
 

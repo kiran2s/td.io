@@ -964,6 +964,7 @@ var THREEx	= THREEx 		|| {};
  *   - in this._onkeyChange, generate a string from the DOM event
  *   - use this as event name
 */
+
 THREEx.KeyboardState	= function()
 {
 	this.keyCodes	= {};
