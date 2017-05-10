@@ -17,6 +17,9 @@ class ClientGameState extends GameState {
     }
 	
 	draw(ctx, otherPlayers, bullets, collectibles) {
+		this.canvasPlayerPosition.x = this.canvas.width/2 + this.player.velocity.x/5; //secret sauce for camera movement
+		this.canvasPlayerPosition.y = this.canvas.height/2 + this.player.velocity.y/5; //secret sauce for camera movement
+		
 		let playerPosition = this.player.position;
 		let canvas = this.canvas;
 		let canvasPlayerPosition = this.canvasPlayerPosition;
