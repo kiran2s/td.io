@@ -55,7 +55,7 @@ class Player extends GameObject {
 			}
 		}
 		
-		this.velocity.add(acceleration);
+		this.velocity.add(new Vector2D().copy(acceleration).mul(deltaTime));
 		if (this.velocity.getLength() > this.maxSpeed) {
 			this.velocity.setLength(this.maxSpeed);
 		}
