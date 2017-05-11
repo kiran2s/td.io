@@ -31,6 +31,9 @@
 - refactor input processing
 - improved collision detection
 	- ability to check collision by actual shape rather than bounding boxes (spatial hash) - necessary for large objects.
+- make input processing and collision detection into 'shared' modules - simplifies codebase and makes client prediction easier.
+
+
 - Minimap
 - Inventory
 - Player Attributes
