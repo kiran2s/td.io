@@ -31,9 +31,17 @@ class ClientPlayer extends Player {
 		let weapon = playerUpdateProperties.weapon;
 		this.weapon = new ClientWeapon(weapon.name, weapon.distanceFromPlayer, weapon.size, weapon.color, weapon.outlineColor);
 		let base = playerUpdateProperties.base;
-		if (base !== null)
-			this.base = new ClientNode(base.position, null, base.children, base.radius, base.health, base.color, base.outlineColor);
-		else this.base = null;
+		if (base !== null){
+			if (this.base === null){
+				this.base = new ClientNode(base.position, null, base.children, base.radius, base.health, base.color, base.outlineColor, base.id);
+			}
+			else{
+				this.base.setUpdateProperties(base);
+			}
+		}
+		else{
+			this.base = null;
+		}
 		this.color = playerUpdateProperties.color;
 		this.outlineColor = playerUpdateProperties.outlineColor;
 	}

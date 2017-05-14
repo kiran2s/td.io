@@ -4,6 +4,7 @@ var Node = require('../shared/Node');
 var Collidable = require('./Collidable');
 var Vector2D = require('../lib/Vector2D');
 var Globals = require('../lib/Globals');
+var underscore = require('underscore');
 
 class ServerNode extends Node {
 	constructor(ownerID, velocity, position, parent, children, radius = 50, health = 100, color = "red", outlineColor = 'rgba(80,80,80,1)') {
@@ -24,26 +25,48 @@ class ServerNode extends Node {
 		this.ownerID = ownerID;
 		this.children = _children;
 		this.velocity = velocity;
+		this._copy = null;
+		// this._updatePropertyNames = null;
 	}
+
+
 
 	getUpdateProperties() { 
 
-		var _children = [];
+		var _children = {};
 		for (var i = 0; i<this.children.length; i++){
-			_children.push(this.children[i].getUpdateProperties());
+			_children[this.children[i].id] = this.children[i].getUpdateProperties();
 		}
-		return {
-			position: this.position,
-			radius: this.radius,
-			health: this.health,
-			color: this.color,
-			outlineColor: this.outlineColor,
-			children: _children
-		};
+
+		if (this._copy === null){
+			this._copy = {
+				position: this.position,
+				radius: this.radius,
+				health: this.health,
+				color: this.color,
+				outlineColor: this.outlineColor,
+				children: _children,
+				id: this.id
+			};
+			return this._copy;
+		// 	this._updatePropertyNames = Object.keys(this._copy);
+		}
+		else {
+			let update = {};
+			for (let i in this._copy){
+				if (i !== 'children' && i !== 'id' && !underscore.isEqual(this._copy[i], this[i])){
+					this._copy[i] = this[i];
+					update[i] = this[i];
+				}
+			}
+			update.children = _children;
+			update.id = this.id;
+			return update;
+		}
 	}
 	
 	update(deltaTime) {
-		let displacement = new Vector2D().copy(this.velocity).mul(deltaTime);
+		let displacement = new Vector2D()._copy(this.velocity).mul(deltaTime);
 		this._update(displacement);
 	}
 

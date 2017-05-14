@@ -1,7 +1,6 @@
 'use strict';
 
 var uuid = require('node-uuid');
-
 var GameState = require('../shared/GameState');
 var ServerPlayer = require('./ServerPlayer');
 var ServerCollectible = require('./ServerCollectible');

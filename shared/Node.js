@@ -4,7 +4,7 @@ var GameObject = require('./GameObject');
 var uuid = require('node-uuid');
 
 class Node extends GameObject{
-	constructor(position, parent, children, radius, health, color, outlineColor, id = uuid(), maxChildren = 3, maxLengthToChildren = 500, minLengthToChildren = 0) {
+	constructor(position, parent, children, radius, health, color, outlineColor, id = uuid(), maxChildren = 2, maxLengthToChildren = 500, minLengthToChildren = 0) {
 		super(position, radius*2, color);
 		this.radius = radius; 
 		this.id = id;
@@ -16,7 +16,10 @@ class Node extends GameObject{
 		this.maxChildren = maxChildren;
 		this.maxLengthToChildren = maxLengthToChildren;
 		this.minLengthToChildren = minLengthToChildren;
-		if (parent === null) this.distanceFromRoot = 0;
+		if (parent === null){
+			this.distanceFromRoot = 0;
+			this.maxChildren = 3;
+		}
 		else this.distanceFromRoot = parent.distanceFromRoot + 1;
 	}
 
@@ -34,8 +37,8 @@ class Node extends GameObject{
 	}
 
 	getTreeSize(){
-		var size = 1
-		for (var i = 0; i < this.children.length; i++){
+		var size = 1;
+		for (let i = 0; i < this.children.length; i++){
 			size += this.children[i].getTreeSize();
 		}
 		return size;

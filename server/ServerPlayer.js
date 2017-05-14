@@ -34,7 +34,9 @@ class ServerPlayer extends Player {
 	getUpdateProperties(liteVersion) {
 		var _base = null;
 		if (this.base === null) _base = null;
-		else _base = this.base.getUpdateProperties();
+		else{
+			_base = this.base.getUpdateProperties();
+		}
 
 		if (liteVersion) {
 			return {

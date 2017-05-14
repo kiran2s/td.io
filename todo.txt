@@ -1,3 +1,4 @@
+CODING STUFF
 - Review code
 	- Make all GameObjects in shared abstract or use them for creating updates at the server.
 - Improve performance
@@ -14,6 +15,17 @@
 - Client prediction for bullets
 	- Move bullets to Weapon class
 
+- refactor input processing
+- improved collision detection
+	- ability to check collision by actual shape rather than bounding boxes (spatial hash) - necessary for large objects.
+- make input processing and collision detection into 'shared' modules - simplifies codebase and makes client prediction easier.
+-server sending "incomplete" gamestate - only objects visible to that client? (decrease network load / prevent zoom-hacks). 
+-window resizing and scaling based on window size.
+-performance issues with constantly recreating all client objects upon every server update. Idea: server only sends properties that have changed. Client only updates the properties that the server sends. 
+- Add comments
+
+
+GAMEPLAY STUFF
 - Base 
 	IDEAS
 		-node improvements
@@ -27,14 +39,9 @@
 			-RESPAWN (mother node): allow player to respawn 
 		- spawn player next to base upon death
 		- draw transparent node where actual node would be placed
-
-- refactor input processing
-- improved collision detection
-	- ability to check collision by actual shape rather than bounding boxes (spatial hash) - necessary for large objects.
-- make input processing and collision detection into 'shared' modules - simplifies codebase and makes client prediction easier.
-
-
 - Minimap
+	- only bases by default? 
+	- Indicator if base being attacked?
 - Inventory
 - Player Attributes
 	IDEAS
@@ -46,15 +53,18 @@
 			-SPEED
 			-BOOST
 	  		(and other diep-like upgrades)
+	  		-UAV - ability to see other players on the mini-map?
 
 - Leaderboard
-- Indicator if base being attacked
 
-- Add comments 
+ 
 
 -----------------------------------------------------------------------
 Bugs:
 - setTranform affects clearing canvas
+
+- With baseline at ~0.3ms, drawing a massive base that fills the screen increases draw time to ~4-6 ms. Deleting the base causes draw time to move down to ~1.5 ms but never back to normal.
+
 
 -----------------------------------------------------------------------
 

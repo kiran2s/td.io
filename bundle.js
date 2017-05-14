@@ -626,22 +626,73 @@ var HealthBar = require('./HealthBar');
 
 
 class ClientNode extends Node{
-	constructor(position, parent, children, radius, health, color, outlineColor) {
-		super(new Vector2D(position.x, position.y), parent, children, radius, health, color, outlineColor);
-		var children = [];
-		for (var i = 0; i < this.children.length; i++){
-			children.push(new ClientNode(this.children[i].position, //recursively generate all child Nodes
+	constructor(position, parent, children, radius, health, color, outlineColor, id) {
+		super(new Vector2D(position.x, position.y), parent, children, radius, health, color, outlineColor, id);
+		var _children = [];
+		for (let i in this.children){
+			//console.log(i);
+			_children.push(new ClientNode(this.children[i].position, //recursively generate all child Nodes
 										this, 
 										this.children[i].children,
 										this.children[i].radius, 
 										this.children[i].health, 
 										this.children[i].color, 
-										this.children[i].outlineColor));
+										this.children[i].outlineColor,
+										this.children[i].id));
 		}
-		this.children = children;
+		this.children = _children;
+		//console.log("this.children is array."+Array.isArray(this.children));
+		//console.log("constructor children: "+ this.children.length);
 		this.healthBar = new HealthBar(new Vector2D(0, this.radius + 12), this.radius * 2.5);
+	}
+
+	//update the base based on the nodeUpdate 
+	setUpdateProperties(nodeUpdate){
+		//console.log(nodeUpdate);
+		for (let i in nodeUpdate){ 
+			if (i!=='children' && i!=='id'){
+				//console.log(i);
+				this[i] = nodeUpdate[i]; //assign all properties from the update
+			}
+		}
+		let j = 0;
+		while (j < this.children.length){ 
+			//console.log("i "+ j);
+			//console.log("children "+this.children.length);
+			if (nodeUpdate.children[this.children[j].id] === undefined){ //deleted nodes
+				this.children.splice(j,1);
+				//console.log(this.children[j].id+ " is undefined!");
+			}
+			else{ //updated nodes
+				this.children[j].setUpdateProperties(nodeUpdate.children[this.children[j].id]);
+				nodeUpdate.children[this.children[j].id]._checked = true;
+				//console.log(this.children[j].id+ " is checked!");
+				//console.log(nodeUpdate.children[this.children[j].id]);
+				j++;
+			}
+		}
+		//new nodes
+		for (let k in nodeUpdate.children){
+			//console.log(k);
+			if (nodeUpdate.children[k]._checked === undefined){
+				//console.log(k + " is not checked!");
+				//console.log(k);
+				this.children.push(new ClientNode(nodeUpdate.children[k].position, 
+												this,
+												nodeUpdate.children[k].children,
+												nodeUpdate.children[k].radius,
+												nodeUpdate.children[k].health,
+												nodeUpdate.children[k].color,
+												nodeUpdate.children[k].outlineColor, 
+												nodeUpdate.children[k].id));
+			}
+			else delete nodeUpdate.children[k]._checked;
+		}
+		//console.log("finished updating " + this.id);
 
 	}
+
+
 	
 	draw(ctx, transformToCameraCoords) {
 		for (var i = 0; i < this.children.length; i++){
@@ -654,6 +705,7 @@ class ClientNode extends Node{
 			ctx.stroke();
 			this.children[i].draw(ctx, transformToCameraCoords);
 		}
+
 		transformToCameraCoords();
 		ctx.beginPath();
 		ctx.arc(this.position.x, this.position.y, this.radius, 0, Globals.DEGREES_360); // unrounded
@@ -710,9 +762,17 @@ class ClientPlayer extends Player {
 		let weapon = playerUpdateProperties.weapon;
 		this.weapon = new ClientWeapon(weapon.name, weapon.distanceFromPlayer, weapon.size, weapon.color, weapon.outlineColor);
 		let base = playerUpdateProperties.base;
-		if (base !== null)
-			this.base = new ClientNode(base.position, null, base.children, base.radius, base.health, base.color, base.outlineColor);
-		else this.base = null;
+		if (base !== null){
+			if (this.base === null){
+				this.base = new ClientNode(base.position, null, base.children, base.radius, base.health, base.color, base.outlineColor, base.id);
+			}
+			else{
+				this.base.setUpdateProperties(base);
+			}
+		}
+		else{
+			this.base = null;
+		}
 		this.color = playerUpdateProperties.color;
 		this.outlineColor = playerUpdateProperties.outlineColor;
 	}
@@ -1499,7 +1559,7 @@ var GameObject = require('./GameObject');
 var uuid = require('node-uuid');
 
 class Node extends GameObject{
-	constructor(position, parent, children, radius, health, color, outlineColor, id = uuid(), maxChildren = 3, maxLengthToChildren = 500, minLengthToChildren = 0) {
+	constructor(position, parent, children, radius, health, color, outlineColor, id = uuid(), maxChildren = 2, maxLengthToChildren = 500, minLengthToChildren = 0) {
 		super(position, radius*2, color);
 		this.radius = radius; 
 		this.id = id;
@@ -1511,7 +1571,10 @@ class Node extends GameObject{
 		this.maxChildren = maxChildren;
 		this.maxLengthToChildren = maxLengthToChildren;
 		this.minLengthToChildren = minLengthToChildren;
-		if (parent === null) this.distanceFromRoot = 0;
+		if (parent === null){
+			this.distanceFromRoot = 0;
+			this.maxChildren = 3;
+		}
 		else this.distanceFromRoot = parent.distanceFromRoot + 1;
 	}
 
@@ -1529,8 +1592,8 @@ class Node extends GameObject{
 	}
 
 	getTreeSize(){
-		var size = 1
-		for (var i = 0; i < this.children.length; i++){
+		var size = 1;
+		for (let i = 0; i < this.children.length; i++){
 			size += this.children[i].getTreeSize();
 		}
 		return size;

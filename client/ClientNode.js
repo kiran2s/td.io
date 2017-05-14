@@ -7,22 +7,70 @@ var HealthBar = require('./HealthBar');
 
 
 class ClientNode extends Node{
-	constructor(position, parent, children, radius, health, color, outlineColor) {
-		super(new Vector2D(position.x, position.y), parent, children, radius, health, color, outlineColor);
-		var children = [];
-		for (var i = 0; i < this.children.length; i++){
-			children.push(new ClientNode(this.children[i].position, //recursively generate all child Nodes
+	constructor(position, parent, children, radius, health, color, outlineColor, id) {
+		super(new Vector2D(position.x, position.y), parent, children, radius, health, color, outlineColor, id);
+		var _children = [];
+		for (let i in this.children){
+			_children.push(new ClientNode(this.children[i].position, //recursively generate all child Nodes
 										this, 
 										this.children[i].children,
 										this.children[i].radius, 
 										this.children[i].health, 
 										this.children[i].color, 
-										this.children[i].outlineColor));
+										this.children[i].outlineColor,
+										this.children[i].id));
 		}
-		this.children = children;
+		this.children = _children;
 		this.healthBar = new HealthBar(new Vector2D(0, this.radius + 12), this.radius * 2.5);
+	}
+
+	//update the base based on the nodeUpdate 
+	setUpdateProperties(nodeUpdate){
+		//console.log(nodeUpdate);
+		for (let i in nodeUpdate){ 
+			if (i!=='children' && i!=='id'){
+				//console.log(i);
+				this[i] = nodeUpdate[i]; //assign all properties from the update
+			}
+		}
+		let j = 0;
+		while (j < this.children.length){ 
+			//console.log("i "+ j);
+			//console.log("children "+this.children.length);
+			if (nodeUpdate.children[this.children[j].id] === undefined){ //deleted nodes
+				this.children.splice(j,1);
+				//console.log(this.children[j].id+ " is undefined!");
+			}
+			else{ //updated nodes
+				this.children[j].setUpdateProperties(nodeUpdate.children[this.children[j].id]);
+				nodeUpdate.children[this.children[j].id]._checked = true;
+				//console.log(this.children[j].id+ " is checked!");
+				//console.log(nodeUpdate.children[this.children[j].id]);
+				j++;
+			}
+		}
+		//new nodes
+		for (let k in nodeUpdate.children){
+			//console.log(k);
+			if (nodeUpdate.children[k]._checked === undefined){
+				//console.log(k + " is not checked!");
+				//console.log(k);
+				this.children.push(new ClientNode(nodeUpdate.children[k].position, 
+												this,
+												nodeUpdate.children[k].children,
+												nodeUpdate.children[k].radius,
+												nodeUpdate.children[k].health,
+												nodeUpdate.children[k].color,
+												nodeUpdate.children[k].outlineColor, 
+												nodeUpdate.children[k].id));
+			}
+			else delete nodeUpdate.children[k]._checked;
+		}
+		//console.log("finished updating " + this.id);
 
 	}
+
+
 	
 	draw(ctx, transformToCameraCoords) {
 		for (var i = 0; i < this.children.length; i++){
@@ -35,6 +83,7 @@ class ClientNode extends Node{
 			ctx.stroke();
 			this.children[i].draw(ctx, transformToCameraCoords);
 		}
+
 		transformToCameraCoords();
 		ctx.beginPath();
 		ctx.arc(this.position.x, this.position.y, this.radius, 0, Globals.DEGREES_360); // unrounded
@@ -46,7 +95,7 @@ class ClientNode extends Node{
 		ctx.stroke();
 
 		this.healthBar.update(this.health);
-		if (this.health < 100.0) {
+		if (this.health < 100) {
 			transformToCameraCoords();
 			ctx.transform(1, 0, 0, 1, this.position.x, this.position.y); //unrounded
 			//ctx.transform(1, 0, 0, 1, ~~(0.5 + this.position.x), ~~(0.5 + this.position.y)); //rounded
