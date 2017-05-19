@@ -11,7 +11,7 @@ CODING STUFF
 		- maybe replace interpolation with server sending more gamestates
 	- pre-render if possible
 
-- Player should be slightly offset from center of canvas depending on movement
+
 - Client prediction for bullets
 	- Move bullets to Weapon class
 
@@ -20,8 +20,8 @@ CODING STUFF
 	- ability to check collision by actual shape rather than bounding boxes (spatial hash) - necessary for large objects.
 - make input processing and collision detection into 'shared' modules - simplifies codebase and makes client prediction easier.
 -server sending "incomplete" gamestate - only objects visible to that client? (decrease network load / prevent zoom-hacks). 
--window resizing and scaling based on window size.
--performance issues with constantly recreating all client objects upon every server update. Idea: server only sends properties that have changed. Client only updates the properties that the server sends. 
+
+-performance issues with constantly recreating all client objects upon every server update. Idea: server only sends properties that have changed. Client only updates the properties that the server sends.  (*implemented for bases*)
 - Add comments
 
 
