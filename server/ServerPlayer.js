@@ -31,11 +31,11 @@ class ServerPlayer extends Player {
 		this.selectedNode = null;
 	}
 
-	getUpdateProperties(liteVersion) {
+	getUpdateProperties(liteVersion, fullUpdate) {
 		var _base = null;
 		if (this.base === null) _base = null;
 		else{
-			_base = this.base.getUpdateProperties();
+			_base = this.base.getUpdateProperties(fullUpdate);
 		}
 
 		if (liteVersion) {

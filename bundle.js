@@ -33,9 +33,9 @@ class Client {
 		this.socket.on('update', this.handleUpdateFromServer.bind(this));
 		
 		this.canvas = document.getElementById('canvas');
-		this.canvas.width = window.innerWidth;
-		this.canvas.height = window.innerHeight;
 		this.ctx = this.canvas.getContext('2d');
+		this.scaleCanvas();
+
 
 		if (this.gamestate === undefined) {
 			this.gamestate = null;
@@ -56,6 +56,19 @@ class Client {
 		document.ondragstart = function(event) { return false };
 		
 		window.onresize = this.onWindowResize.bind(this);
+	}
+
+	scaleCanvas(){
+		this.canvas.width = window.innerWidth;
+		this.canvas.height = window.innerHeight;
+
+		let aspect = this.canvas.width / this.canvas.height;
+		if (aspect < Globals.DEFAULT_ASPECT){
+			this.scale = this.canvas.height / Globals.DEFAULT_HEIGHT;
+		}
+		else{
+			this.scale = this.canvas.width / Globals.DEFAULT_WIDTH;
+		}
 	}
 
 	run() {
@@ -95,8 +108,9 @@ class Client {
 			this.inputUpdates.splice(0, discardIndex + 1);
 			
 			//block MOVED from updateGameState() -- want to apply inputs to server update immediately, only once.
-			if (!(this.ID in this.gameStateUpdates[this.gameStateUpdates.length-1].otherPlayers))
+			if (this.gameStateUpdates[this.gameStateUpdates.length-1].player === null){
 				this.gamestate=null;
+			}
 			else {
 				this.gamestate.setPlayerProperties(this.gameStateUpdates[this.gameStateUpdates.length-1].player);
 				for (let i = 0; i < this.inputUpdates.length; i++) {
@@ -166,14 +180,14 @@ class Client {
 		}
 
 		let entities = this.performEntityInterpolation();
-		this.gamestate.draw(this.ctx, entities.otherPlayers, entities.bullets, entities.collectibles);
+		this.gamestate.draw(this.ctx, this.scale, entities.otherPlayers, entities.bullets, entities.collectibles);
 		
-		this.ctx.setTransform(1, 0, 0, 1, 0, 0);
+		this.ctx.setTransform(this.scale, 0, 0, this.scale, 0, 0);
 		this.ctx.fillStyle = "purple";
 		this.ctx.font = '15px Arial';
-		this.ctx.fillText("[1]  Pleb Pistol", 20, this.canvas.height - 70);
-		this.ctx.fillText("[2]  Flame Thrower", 20, this.canvas.height - 50);
-		this.ctx.fillText("[3]  Volcano", 20, this.canvas.height - 30);
+		this.ctx.fillText("[1]  Pleb Pistol", 20, this.canvas.height/this.scale - 70);
+		this.ctx.fillText("[2]  Flame Thrower", 20, this.canvas.height/this.scale - 50);
+		this.ctx.fillText("[3]  Volcano", 20, this.canvas.height/this.scale - 30);
 
 		frameCount++;
 		let currTime = Date.now();
@@ -233,7 +247,7 @@ class Client {
 		this.prevKeysPressed = Globals.clone(keys);
 
 		let mouseDirection = (this.gamestate !== null) ?
-			new Vector2D(this.mouse.x, this.mouse.y).sub(new Vector2D(this.gamestate.canvasPlayerPosition.x, this.gamestate.canvasPlayerPosition.y)) :
+			new Vector2D(this.mouse.x, this.mouse.y).sub(new Vector2D(this.gamestate.canvasPlayerPosition.x, this.gamestate.canvasPlayerPosition.y)).div(this.scale):
 			null;
 		let mousePosition = (this.gamestate !== null) ?
 			new Vector2D(this.gamestate.player.position.x, this.gamestate.player.position.y).add(mouseDirection) :
@@ -467,8 +481,7 @@ class Client {
 	}
 	
 	onWindowResize(event) {
-		this.canvas.width = window.innerWidth;
-		this.canvas.height = window.innerHeight;
+		this.scaleCanvas();
 	}
 }
 
@@ -562,9 +575,9 @@ class ClientGameState extends GameState {
 		this.grid = document.getElementById("grid");
     }
 	
-	draw(ctx, otherPlayers, bullets, collectibles) {
-		let lengthFromCenter = 50*Math.pow((this.player.velocity.getLength()/this.player.maxSpeed), 2);
-		let displacementFromCenter = new Vector2D().copy(this.player.velocity).setLength(lengthFromCenter); //displacement is a vector in the same direction as velocity, but length = length(velocity)^2 / 1000
+	draw(ctx, scale, otherPlayers, bullets, collectibles) {
+		let lengthFromCenter = scale*50*Math.pow((this.player.velocity.getLength()/this.player.maxSpeed), 2);
+		let displacementFromCenter = new Vector2D().copy(this.player.velocity).setLength(lengthFromCenter); //displacement is a vector in the same direction as velocity, but length = length(velocity)^2 *50
 
 		this.canvasPlayerPosition.x = this.canvas.width/2 + displacementFromCenter.x; //secret sauce for camera movement
 		this.canvasPlayerPosition.y = this.canvas.height/2 + displacementFromCenter.y; //secret sauce for camera movement
@@ -573,11 +586,9 @@ class ClientGameState extends GameState {
 		let canvas = this.canvas;
 		let canvasPlayerPosition = this.canvasPlayerPosition;
 		let transformToCameraCoords = function() {
-			ctx.setTransform(1, 0, 0, 1, 
-				canvasPlayerPosition.x - playerPosition.x, //unrounded
-				canvasPlayerPosition.y - playerPosition.y //unrounded
-				//canvas.width/2 - ~~(0.5 + playerPosition.x), //rounded
-				//canvas.height/2 - ~~(0.5 + playerPosition.y) //rounded
+			ctx.setTransform(scale, 0, 0, scale, 
+				canvasPlayerPosition.x - playerPosition.x*scale, //unrounded
+				canvasPlayerPosition.y - playerPosition.y*scale //unrounded
 			);
 		};
 
@@ -586,7 +597,7 @@ class ClientGameState extends GameState {
 		this.player.draw(
 			ctx,
 			function() {
-				ctx.setTransform(1, 0, 0, 1, canvasPlayerPosition.x, canvasPlayerPosition.y);
+				ctx.setTransform(scale, 0, 0, scale, canvasPlayerPosition.x, canvasPlayerPosition.y);
 			},
 			transformToCameraCoords
 		);
@@ -630,7 +641,6 @@ class ClientNode extends Node{
 		super(new Vector2D(position.x, position.y), parent, children, radius, health, color, outlineColor, id);
 		var _children = [];
 		for (let i in this.children){
-			//console.log(i);
 			_children.push(new ClientNode(this.children[i].position, //recursively generate all child Nodes
 										this, 
 										this.children[i].children,
@@ -641,8 +651,6 @@ class ClientNode extends Node{
 										this.children[i].id));
 		}
 		this.children = _children;
-		//console.log("this.children is array."+Array.isArray(this.children));
-		//console.log("constructor children: "+ this.children.length);
 		this.healthBar = new HealthBar(new Vector2D(0, this.radius + 12), this.radius * 2.5);
 	}
 
@@ -693,37 +701,70 @@ class ClientNode extends Node{
 	}
 
 
-	
-	draw(ctx, transformToCameraCoords) {
-		for (var i = 0; i < this.children.length; i++){
+	draw(ctx, transformToCameraCoords) {  //iterative draw 
+		transformToCameraCoords();
+		var drawQueue = [this];
+		console.log(this.health);
+		while (drawQueue.length != 0){
 			transformToCameraCoords();
-			ctx.beginPath();
-        	ctx.moveTo(this.position.x, this.position.y);
-			ctx.lineTo(this.children[i].position.x, this.children[i].position.y);
+			let item = drawQueue.shift();
 			ctx.strokeStyle = 'rgba(80,80,80,1)';
 			ctx.lineWidth = 3;
+			ctx.beginPath();
+			for (let i in item.children){
+        		ctx.moveTo(item.position.x, item.position.y);
+				ctx.lineTo(item.children[i].position.x, item.children[i].position.y);
+				drawQueue.push(item.children[i]);
+			}
 			ctx.stroke();
-			this.children[i].draw(ctx, transformToCameraCoords);
-		}
+			ctx.beginPath();
+			ctx.arc(item.position.x, item.position.y, item.radius, 0, Globals.DEGREES_360); // unrounded
+			//ctx.arc(~~(0.5 + this.position.x), ~~(0.5 + this.position.y), this.radius, 0, Globals.DEGREES_360); //rounded
+			ctx.fillStyle = item.color;
+			ctx.fill();
+			ctx.strokeStyle = item.outlineColor;
+			ctx.lineWidth = 3;
+			ctx.stroke();
 
-		transformToCameraCoords();
-		ctx.beginPath();
-		ctx.arc(this.position.x, this.position.y, this.radius, 0, Globals.DEGREES_360); // unrounded
-		//ctx.arc(~~(0.5 + this.position.x), ~~(0.5 + this.position.y), this.radius, 0, Globals.DEGREES_360); //rounded
-		ctx.fillStyle = this.color;
-		ctx.fill();
-		ctx.strokeStyle = this.outlineColor;
-		ctx.lineWidth = 3;
-		ctx.stroke();
-
-		this.healthBar.update(this.health);
-		if (this.health < 100.0) {
-			transformToCameraCoords();
-			ctx.transform(1, 0, 0, 1, this.position.x, this.position.y); //unrounded
-			//ctx.transform(1, 0, 0, 1, ~~(0.5 + this.position.x), ~~(0.5 + this.position.y)); //rounded
-			this.healthBar.draw(ctx);
+			item.healthBar.update(item.health);
+			if (item.health < 100) {
+				ctx.transform(1, 0, 0, 1, item.position.x, item.position.y); //unrounded
+				//ctx.transform(1, 0, 0, 1, ~~(0.5 + this.position.x), ~~(0.5 + this.position.y)); //rounded
+				item.healthBar.draw(ctx);
+			}
 		}
 	}
+
+	// draw(ctx, transformToCameraCoords) {   //recursive draw
+	// 	for (var i = 0; i < this.children.length; i++){
+	// 		transformToCameraCoords();
+	// 		ctx.beginPath();
+ //        	ctx.moveTo(this.position.x, this.position.y);
+	// 		ctx.lineTo(this.children[i].position.x, this.children[i].position.y);
+	// 		ctx.strokeStyle = 'rgba(80,80,80,1)';
+	// 		ctx.lineWidth = 3;
+	// 		ctx.stroke();
+	// 		this.children[i].draw(ctx, transformToCameraCoords);
+	// 	}
+	// 	transformToCameraCoords();
+	// 	ctx.beginPath();
+	// 	ctx.arc(this.position.x, this.position.y, this.radius, 0, Globals.DEGREES_360); // unrounded
+	// 	//ctx.arc(~~(0.5 + this.position.x), ~~(0.5 + this.position.y), this.radius, 0, Globals.DEGREES_360); //rounded
+	// 	ctx.fillStyle = this.color;
+	// 	ctx.fill();
+	// 	ctx.strokeStyle = this.outlineColor;
+	// 	ctx.lineWidth = 3;
+	// 	ctx.stroke();
+
+	// 	this.healthBar.update(this.health);
+	// 	if (this.health < 100.0) {
+	// 		transformToCameraCoords();
+	// 		ctx.transform(1, 0, 0, 1, this.position.x, this.position.y); //unrounded
+	// 		//ctx.transform(1, 0, 0, 1, ~~(0.5 + this.position.x), ~~(0.5 + this.position.y)); //rounded
+	// 		this.healthBar.draw(ctx);
+	// 	}
+	// }
+
 }
 
 
@@ -900,7 +941,7 @@ class OtherPlayer extends GameObject {
         this.weapon = new ClientWeapon(weapon.name, weapon.distanceFromPlayer, weapon.size, weapon.color, weapon.outlineColor);
         this.outlineColor = outlineColor;
         if (base !== null)
-			this.base = new ClientNode(base.position, null, base.children, base.radius, base.health, base.color, base.outlineColor);
+			this.base = new ClientNode(base.position, null, base.children, base.radius, base.health, base.color, base.outlineColor, base.id);
 		else this.base = null;
 		this.healthBar = new HealthBar(new Vector2D(0, this.radius + 12), this.radius * 2.5);
     }
@@ -950,6 +991,10 @@ module.exports = {
     DEGREES_360: 2*Math.PI,
     WORLD_WIDTH: 4000,
     WORLD_HEIGHT: 4000,
+    DEFAULT_HEIGHT: 576,
+    DEFAULT_WIDTH: 1024,
+    DEFAULT_ASPECT: 16/9,
+    DEFAULT_SCALE: 1,
 
 
     areObjectsSame: function(o1, o2) {
@@ -1174,6 +1219,12 @@ class Vector2D {
 	mul(scalar) {
 		this.x *= scalar;
 		this.y *= scalar;
+		return this;
+	}
+
+	div(scalar) {
+		this.x /= scalar;
+		this.y /= scalar;
 		return this;
 	}
 	
@@ -1500,7 +1551,7 @@ module.exports = Collectible;
 
 /* Abstract */
 class GameObject {
-	constructor(position, size, color) {
+	constructor(position, size, color, shape) {
 		if (this.constructor === GameObject) {
 			throw new Error("Attempt to instantiate abstract class GameObject.");
 		}
@@ -1508,6 +1559,7 @@ class GameObject {
 		this.position = position;
 		this.size = size;
 		this.color = color;
+		this.shape = shape; 
 	}
 	
 	update(deltaTime) {

@@ -16,9 +16,9 @@ class ClientGameState extends GameState {
 		this.grid = document.getElementById("grid");
     }
 	
-	draw(ctx, otherPlayers, bullets, collectibles) {
-		let lengthFromCenter = 50*Math.pow((this.player.velocity.getLength()/this.player.maxSpeed), 2);
-		let displacementFromCenter = new Vector2D().copy(this.player.velocity).setLength(lengthFromCenter); //displacement is a vector in the same direction as velocity, but length = length(velocity)^2 / 1000
+	draw(ctx, scale, otherPlayers, bullets, collectibles) {
+		let lengthFromCenter = scale*50*Math.pow((this.player.velocity.getLength()/this.player.maxSpeed), 2);
+		let displacementFromCenter = new Vector2D().copy(this.player.velocity).setLength(lengthFromCenter); //displacement is a vector in the same direction as velocity, but length = length(velocity)^2 *50
 
 		this.canvasPlayerPosition.x = this.canvas.width/2 + displacementFromCenter.x; //secret sauce for camera movement
 		this.canvasPlayerPosition.y = this.canvas.height/2 + displacementFromCenter.y; //secret sauce for camera movement
@@ -27,11 +27,9 @@ class ClientGameState extends GameState {
 		let canvas = this.canvas;
 		let canvasPlayerPosition = this.canvasPlayerPosition;
 		let transformToCameraCoords = function() {
-			ctx.setTransform(1, 0, 0, 1, 
-				canvasPlayerPosition.x - playerPosition.x, //unrounded
-				canvasPlayerPosition.y - playerPosition.y //unrounded
-				//canvas.width/2 - ~~(0.5 + playerPosition.x), //rounded
-				//canvas.height/2 - ~~(0.5 + playerPosition.y) //rounded
+			ctx.setTransform(scale, 0, 0, scale, 
+				canvasPlayerPosition.x - playerPosition.x*scale, //unrounded
+				canvasPlayerPosition.y - playerPosition.y*scale //unrounded
 			);
 		};
 
@@ -40,7 +38,7 @@ class ClientGameState extends GameState {
 		this.player.draw(
 			ctx,
 			function() {
-				ctx.setTransform(1, 0, 0, 1, canvasPlayerPosition.x, canvasPlayerPosition.y);
+				ctx.setTransform(scale, 0, 0, scale, canvasPlayerPosition.x, canvasPlayerPosition.y);
 			},
 			transformToCameraCoords
 		);

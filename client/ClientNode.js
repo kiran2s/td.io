@@ -71,37 +71,70 @@ class ClientNode extends Node{
 	}
 
 
-	
-	draw(ctx, transformToCameraCoords) {
-		for (var i = 0; i < this.children.length; i++){
+	draw(ctx, transformToCameraCoords) {  //iterative draw 
+		transformToCameraCoords();
+		var drawQueue = [this];
+		console.log(this.health);
+		while (drawQueue.length != 0){
 			transformToCameraCoords();
-			ctx.beginPath();
-        	ctx.moveTo(this.position.x, this.position.y);
-			ctx.lineTo(this.children[i].position.x, this.children[i].position.y);
+			let item = drawQueue.shift();
 			ctx.strokeStyle = 'rgba(80,80,80,1)';
 			ctx.lineWidth = 3;
+			ctx.beginPath();
+			for (let i in item.children){
+        		ctx.moveTo(item.position.x, item.position.y);
+				ctx.lineTo(item.children[i].position.x, item.children[i].position.y);
+				drawQueue.push(item.children[i]);
+			}
 			ctx.stroke();
-			this.children[i].draw(ctx, transformToCameraCoords);
-		}
+			ctx.beginPath();
+			ctx.arc(item.position.x, item.position.y, item.radius, 0, Globals.DEGREES_360); // unrounded
+			//ctx.arc(~~(0.5 + this.position.x), ~~(0.5 + this.position.y), this.radius, 0, Globals.DEGREES_360); //rounded
+			ctx.fillStyle = item.color;
+			ctx.fill();
+			ctx.strokeStyle = item.outlineColor;
+			ctx.lineWidth = 3;
+			ctx.stroke();
 
-		transformToCameraCoords();
-		ctx.beginPath();
-		ctx.arc(this.position.x, this.position.y, this.radius, 0, Globals.DEGREES_360); // unrounded
-		//ctx.arc(~~(0.5 + this.position.x), ~~(0.5 + this.position.y), this.radius, 0, Globals.DEGREES_360); //rounded
-		ctx.fillStyle = this.color;
-		ctx.fill();
-		ctx.strokeStyle = this.outlineColor;
-		ctx.lineWidth = 3;
-		ctx.stroke();
-
-		this.healthBar.update(this.health);
-		if (this.health < 100) {
-			transformToCameraCoords();
-			ctx.transform(1, 0, 0, 1, this.position.x, this.position.y); //unrounded
-			//ctx.transform(1, 0, 0, 1, ~~(0.5 + this.position.x), ~~(0.5 + this.position.y)); //rounded
-			this.healthBar.draw(ctx);
+			item.healthBar.update(item.health);
+			if (item.health < 100) {
+				ctx.transform(1, 0, 0, 1, item.position.x, item.position.y); //unrounded
+				//ctx.transform(1, 0, 0, 1, ~~(0.5 + this.position.x), ~~(0.5 + this.position.y)); //rounded
+				item.healthBar.draw(ctx);
+			}
 		}
 	}
+
+	// draw(ctx, transformToCameraCoords) {   //recursive draw
+	// 	for (var i = 0; i < this.children.length; i++){
+	// 		transformToCameraCoords();
+	// 		ctx.beginPath();
+ //        	ctx.moveTo(this.position.x, this.position.y);
+	// 		ctx.lineTo(this.children[i].position.x, this.children[i].position.y);
+	// 		ctx.strokeStyle = 'rgba(80,80,80,1)';
+	// 		ctx.lineWidth = 3;
+	// 		ctx.stroke();
+	// 		this.children[i].draw(ctx, transformToCameraCoords);
+	// 	}
+	// 	transformToCameraCoords();
+	// 	ctx.beginPath();
+	// 	ctx.arc(this.position.x, this.position.y, this.radius, 0, Globals.DEGREES_360); // unrounded
+	// 	//ctx.arc(~~(0.5 + this.position.x), ~~(0.5 + this.position.y), this.radius, 0, Globals.DEGREES_360); //rounded
+	// 	ctx.fillStyle = this.color;
+	// 	ctx.fill();
+	// 	ctx.strokeStyle = this.outlineColor;
+	// 	ctx.lineWidth = 3;
+	// 	ctx.stroke();
+
+	// 	this.healthBar.update(this.health);
+	// 	if (this.health < 100.0) {
+	// 		transformToCameraCoords();
+	// 		ctx.transform(1, 0, 0, 1, this.position.x, this.position.y); //unrounded
+	// 		//ctx.transform(1, 0, 0, 1, ~~(0.5 + this.position.x), ~~(0.5 + this.position.y)); //rounded
+	// 		this.healthBar.draw(ctx);
+	// 	}
+	// }
+
 }
 
 

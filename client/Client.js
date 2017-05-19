@@ -32,9 +32,9 @@ class Client {
 		this.socket.on('update', this.handleUpdateFromServer.bind(this));
 		
 		this.canvas = document.getElementById('canvas');
-		this.canvas.width = window.innerWidth;
-		this.canvas.height = window.innerHeight;
 		this.ctx = this.canvas.getContext('2d');
+		this.scaleCanvas();
+
 
 		if (this.gamestate === undefined) {
 			this.gamestate = null;
@@ -55,6 +55,19 @@ class Client {
 		document.ondragstart = function(event) { return false };
 		
 		window.onresize = this.onWindowResize.bind(this);
+	}
+
+	scaleCanvas(){
+		this.canvas.width = window.innerWidth;
+		this.canvas.height = window.innerHeight;
+
+		let aspect = this.canvas.width / this.canvas.height;
+		if (aspect < Globals.DEFAULT_ASPECT){
+			this.scale = this.canvas.height / Globals.DEFAULT_HEIGHT;
+		}
+		else{
+			this.scale = this.canvas.width / Globals.DEFAULT_WIDTH;
+		}
 	}
 
 	run() {
@@ -94,8 +107,9 @@ class Client {
 			this.inputUpdates.splice(0, discardIndex + 1);
 			
 			//block MOVED from updateGameState() -- want to apply inputs to server update immediately, only once.
-			if (!(this.ID in this.gameStateUpdates[this.gameStateUpdates.length-1].otherPlayers))
+			if (this.gameStateUpdates[this.gameStateUpdates.length-1].player === null){
 				this.gamestate=null;
+			}
 			else {
 				this.gamestate.setPlayerProperties(this.gameStateUpdates[this.gameStateUpdates.length-1].player);
 				for (let i = 0; i < this.inputUpdates.length; i++) {
@@ -165,14 +179,14 @@ class Client {
 		}
 
 		let entities = this.performEntityInterpolation();
-		this.gamestate.draw(this.ctx, entities.otherPlayers, entities.bullets, entities.collectibles);
+		this.gamestate.draw(this.ctx, this.scale, entities.otherPlayers, entities.bullets, entities.collectibles);
 		
-		this.ctx.setTransform(1, 0, 0, 1, 0, 0);
+		this.ctx.setTransform(this.scale, 0, 0, this.scale, 0, 0);
 		this.ctx.fillStyle = "purple";
 		this.ctx.font = '15px Arial';
-		this.ctx.fillText("[1]  Pleb Pistol", 20, this.canvas.height - 70);
-		this.ctx.fillText("[2]  Flame Thrower", 20, this.canvas.height - 50);
-		this.ctx.fillText("[3]  Volcano", 20, this.canvas.height - 30);
+		this.ctx.fillText("[1]  Pleb Pistol", 20, this.canvas.height/this.scale - 70);
+		this.ctx.fillText("[2]  Flame Thrower", 20, this.canvas.height/this.scale - 50);
+		this.ctx.fillText("[3]  Volcano", 20, this.canvas.height/this.scale - 30);
 
 		frameCount++;
 		let currTime = Date.now();
@@ -232,7 +246,7 @@ class Client {
 		this.prevKeysPressed = Globals.clone(keys);
 
 		let mouseDirection = (this.gamestate !== null) ?
-			new Vector2D(this.mouse.x, this.mouse.y).sub(new Vector2D(this.gamestate.canvasPlayerPosition.x, this.gamestate.canvasPlayerPosition.y)) :
+			new Vector2D(this.mouse.x, this.mouse.y).sub(new Vector2D(this.gamestate.canvasPlayerPosition.x, this.gamestate.canvasPlayerPosition.y)).div(this.scale):
 			null;
 		let mousePosition = (this.gamestate !== null) ?
 			new Vector2D(this.gamestate.player.position.x, this.gamestate.player.position.y).add(mouseDirection) :
@@ -466,8 +480,7 @@ class Client {
 	}
 	
 	onWindowResize(event) {
-		this.canvas.width = window.innerWidth;
-		this.canvas.height = window.innerHeight;
+		this.scaleCanvas();
 	}
 }
 

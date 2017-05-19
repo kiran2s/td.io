@@ -1,6 +1,6 @@
 'use strict';
 
-function Collidable() {
+function Collidable(shape) {
     // spatialhash-2d variables begin
     this.range = {
         x: this.position.x-this.size/2, //new spatial-hash
@@ -22,6 +22,9 @@ function Collidable() {
 			//console.log("Object took "+dmgAmt+ " damage. Object now has " + this.health + " health");
 		}
 	}
+
+
+	this.shape = shape 
 
     /*
     this.getHitBox = function() {

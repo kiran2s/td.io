@@ -2,7 +2,7 @@
 
 /* Abstract */
 class GameObject {
-	constructor(position, size, color) {
+	constructor(position, size, color, shape) {
 		if (this.constructor === GameObject) {
 			throw new Error("Attempt to instantiate abstract class GameObject.");
 		}
@@ -10,6 +10,7 @@ class GameObject {
 		this.position = position;
 		this.size = size;
 		this.color = color;
+		this.shape = shape; 
 	}
 	
 	update(deltaTime) {

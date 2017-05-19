@@ -1,3 +1,5 @@
+var uuid = require('node-uuid');
+var Vector2D = require('./lib/Vector2D.js')
 // var f = function(arr, inputUpdate) {
 // 	let i = arr.length;
 // 	while (i > 0 && arr[i-1] > inputUpdate){
@@ -46,4 +48,25 @@ console.log(undefined===range._checked);
 delete range._checked;
 console.log(undefined===range._checked);
 
+
+
+function lengthInUtf8Bytes(str) {
+  // Matches only the 10.. bytes that are non-initial characters in a multi-byte sequence.
+  var m = encodeURIComponent(str).match(/%[89ABab]/g);
+  return str.length + (m ? m.length : 0);
+}
+
+
+var myJson = JSON.stringify({
+  	position: new Vector2D(0,0),
+	radius: 100,
+	health: 100,
+	color: "red",
+	outlineColor: "yellow",
+	children: null,
+	// id: uuid()
+})
+
+
+console.log(lengthInUtf8Bytes(myJson));
 

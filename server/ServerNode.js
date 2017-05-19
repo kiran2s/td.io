@@ -26,16 +26,38 @@ class ServerNode extends Node {
 		this.children = _children;
 		this.velocity = velocity;
 		this._copy = null;
-		// this._updatePropertyNames = null;
 	}
 
+	getUpdateProperties(fullUpdate) { 
+		if (fullUpdate===false) 
+			return this.getModifiedUpdateProperties();
+		else 
+			return this.getFullUpdateProperties();
+			
+	}
 
-
-	getUpdateProperties() { 
-
+	getFullUpdateProperties(){
 		var _children = {};
 		for (var i = 0; i<this.children.length; i++){
-			_children[this.children[i].id] = this.children[i].getUpdateProperties();
+			_children[this.children[i].id] = this.children[i].getFullUpdateProperties();
+		}
+
+		this._copy = {
+			position: this.position,
+			radius: this.radius,
+			health: this.health,
+			color: this.color,
+			outlineColor: this.outlineColor,
+			children: _children,
+			id: this.id
+		};
+		return this._copy;
+	}
+
+	getModifiedUpdateProperties() { 
+		var _children = {};
+		for (var i = 0; i<this.children.length; i++){
+			_children[this.children[i].id] = this.children[i].getModifiedUpdateProperties();
 		}
 
 		if (this._copy === null){
@@ -49,7 +71,7 @@ class ServerNode extends Node {
 				id: this.id
 			};
 			return this._copy;
-		// 	this._updatePropertyNames = Object.keys(this._copy);
+
 		}
 		else {
 			let update = {};
