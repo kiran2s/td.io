@@ -10,6 +10,7 @@ var KeyboardState = require('../lib/THREEx.KeyboardState');
 var MouseState = require('../lib/MouseState');
 var Vector2D = require('../lib/Vector2D');
 var Globals = require('../lib/Globals');
+var InputProcessing = require('../shared/InputProcessing');
 
 var prevTime = Date.now();
 var frameCount = 0;
@@ -113,10 +114,7 @@ class Client {
 			else {
 				this.gamestate.setPlayerProperties(this.gameStateUpdates[this.gameStateUpdates.length-1].player);
 				for (let i = 0; i < this.inputUpdates.length; i++) {
-					this.gamestate.updatePlayer(
-						this.inputUpdates[i],
-						this.inputUpdates[i].deltaTime
-					);
+					InputProcessing.processInput(this.inputUpdates[i], this.gamestate.player, this.gamestate);
 				}
 			}
 			
@@ -134,10 +132,7 @@ class Client {
 
 		//Client prediction.
 		if (this.gamestate !== null){
-			this.gamestate.updatePlayer(
-						inputUpdate,
-						inputUpdate.deltaTime
-			);
+			InputProcessing.processInput(inputUpdate, this.gamestate.player, this.gamestate);
 		}
 		/*
 		else {

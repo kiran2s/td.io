@@ -70,28 +70,6 @@ class ServerPlayer extends Player {
 
 	}
 
-	update(deltaTime, keysPressed, mouseDirection) {
-		let retval = super.update(deltaTime, keysPressed, mouseDirection);
-		
-		if ('1' in keysPressed) {
-			if (this.weapon.name !== "Pleb Pistol") {
-				this.weapon = ServerWeaponFactory.makePlebPistol(this.radius);
-			}
-		}
-		else if ('2' in keysPressed) {
-			if (this.weapon.name !== "Flame Thrower") {
-				this.weapon = ServerWeaponFactory.makeFlameThrower(this.radius);
-			}
-		}
-		else if ('3' in keysPressed) {
-			if (this.weapon.name !== "Volcano") {
-				this.weapon = ServerWeaponFactory.makeVolcano(this.radius);
-			}
-		}
-		this.updateRange();
-		return retval;
-	}
-
 	buildNode(position){
 		var node = new ServerNode(this.id, new Vector2D(0,0), position, null, []);
 		if (this.base === null){

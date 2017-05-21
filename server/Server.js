@@ -9,6 +9,7 @@ var ServerGameState = require('./ServerGameState');
 var GameStateUpdate = require('../shared/GameStateUpdate');
 var SocketState = require('./SocketState');
 var Globals = require('../lib/Globals');
+var ServerInputProcessing = require('./ServerInputProcessing');
 
 class Server {
 	constructor() {
@@ -142,7 +143,7 @@ class Server {
 						inputUpdate.timestamp - socketState.baselineTime :
 						inputUpdate.timestamp - socketState.updates[i-1].timestamp;
 					inputUpdate.deltaTime /= 1000;
-					this.gamestate.updatePlayer(socketState.socket.id, inputUpdate, inputUpdate.deltaTime); //update Player in GameState (run through all updates in array)
+					ServerInputProcessing.processInput(inputUpdate, this.gamestate.players[clientID], this.gamestate); 
 				}
 				if (updatesLength > 0) {
 					let lastUpdate = socketState.updates[updatesLength - 1];

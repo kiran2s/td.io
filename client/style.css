@@ -1,11 +1,11 @@
-html , body {
-	background: #808080; 
-	color: #fff; 
+body {
+	background-color: #808080; 
+	color: #ffffff; 
 	margin: 0; 
 	padding: 0;
 }
-#canvas {
-	background: #ffffff;
+body canvas {
+	background-color: #808080;
 	position: absolute;
 	left: 0; right: 0; top: 0; bottom: 0; 
 	margin: auto;
