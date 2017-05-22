@@ -18,7 +18,8 @@ class ServerWeapon extends Weapon {
 		bulletRadius, 
 		bulletTimeToExpire, 
 		bulletColor, 
-		bulletOutlineColor
+		bulletOutlineColor, 
+		bulletMass
 	) {
 		super(name, distanceFromPlayer, size, color);
 		
@@ -31,7 +32,7 @@ class ServerWeapon extends Weapon {
 		this.bulletTimeToExpire = bulletTimeToExpire;
 		this.bulletColor = bulletColor;
 		this.bulletOutlineColor = bulletOutlineColor;
-		
+		this.bulletMass = bulletMass;
 		this.prevFireTime = 0;
 	}
 
@@ -63,7 +64,8 @@ class ServerWeapon extends Weapon {
 				this.bulletHealth,
 				this.bulletTimeToExpire,
 				this.bulletColor,
-				this.bulletOutlineColor
+				this.bulletOutlineColor, 
+				this.bulletMass
 			);
 		}
 		else {
@@ -85,15 +87,15 @@ class ServerWeapon extends Weapon {
 
 // dark grey: 'rgba(80,80,80,1)'
 var ServerWeaponFactory = {
-						//name				dist		  		size	color					damage	health	speed	rate	spread	rad	exp		bullet color			bullet outline color
+						//name				dist		  		size	color					damage	health	speed	rate	spread	rad	exp		bullet color			bullet outline color  mass
 	makePlebPistol: function(distanceFromPlayer) {
-		return new ServerWeapon("Pleb Pistol", 	distanceFromPlayer, 19, 	'rgba(255,0,128,1)', 	40, 	1, 		350, 	3, 		12, 	8, 	3000, 	'rgba(255,128,0,1)', 	'rgba(80,80,80,1)');
+		return new ServerWeapon("Pleb Pistol", 	distanceFromPlayer, 19, 	'rgba(255,0,128,1)', 	40, 	1, 		350, 	3, 		12, 	8, 	3000, 	'rgba(255,128,0,1)', 	'rgba(80,80,80,1)', 100);
 	},
 	makeFlameThrower: function(distanceFromPlayer) {
-		return new ServerWeapon("Flame Thrower", 	distanceFromPlayer, 20, 	'rgba(255,140,0,1)', 	3, 		2, 		600, 	1000,	7, 		10, 440, 	'rgba(255,140,0,1)', 	'rgba(255,90,0,1)');
+		return new ServerWeapon("Flame Thrower", 	distanceFromPlayer, 20, 	'rgba(255,140,0,1)', 	3, 		2, 		600, 	1000,	7, 		10, 440, 	'rgba(255,140,0,1)', 	'rgba(255,90,0,1)', 0.000000001);
 	},
 	makeVolcano: function(distanceFromPlayer) {
-		return new ServerWeapon("Volcano", 		distanceFromPlayer, 21, 	'rgba(255,0,0,1)', 		4, 		1, 		150, 	1000, 	60, 	10, 2000, 	'rgba(255,85,0,1)', 	'rgba(255,0,0,1)');
+		return new ServerWeapon("Volcano", 		distanceFromPlayer, 21, 	'rgba(255,0,0,1)', 		4, 		1, 		150, 	1000, 	60, 	10, 2000, 	'rgba(255,85,0,1)', 	'rgba(255,0,0,1)', 0.0000000001);
 	}
 };
 

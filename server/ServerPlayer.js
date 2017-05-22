@@ -6,6 +6,10 @@ var ServerWeaponFactory = require('./ServerWeapon').ServerWeaponFactory;
 var ServerNode = require('./ServerNode');
 var Vector2D = require('../lib/Vector2D');
 var Globals = require('../lib/Globals');
+var Matter = require('matter-js');
+var Body = Matter.Body;
+
+
 
 const DIAG_ACCEL_FACTOR = Math.cos(Math.PI/4);
 
@@ -16,8 +20,8 @@ class ServerPlayer extends Player {
 
 		this.id = id;
 		this.outlineColor = 'rgba(80,80,80,1)';
-		this.maxSpeed = 225;
-		this.minSpeed = 5;
+		this.maxSpeed = 225/40;
+		this.minSpeed = 5/40;
 		this.acceleration = this.maxSpeed*0.8;
 		this.deceleration = this.maxSpeed*0.35;
 		this.radius = this.size/2;
@@ -29,6 +33,8 @@ class ServerPlayer extends Player {
 		this.base = null; 
 		this.baseSize = 0;
 		this.selectedNode = null;
+		this.body.object = this;
+		Body.setMass(this.body, 10000);
 	}
 
 	getUpdateProperties(liteVersion, fullUpdate) {

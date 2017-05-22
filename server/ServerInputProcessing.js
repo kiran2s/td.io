@@ -1,7 +1,9 @@
 var InputProcessing = require('../shared/InputProcessing');
+var Collision = require('../shared/Collision');
 var ServerWeapon = require('./ServerWeapon');
 var ServerPlayer = require('./ServerPlayer');
 var ServerNode = require('./ServerNode');
+var Node = require('../shared/Node');
 var uuid = require('node-uuid');
 var Vector2D = require('../lib/Vector2D');
 
@@ -15,15 +17,7 @@ var processMovementInput = function(input, player, gamestate){
 		return;
 	}
 
-	let preUpdateBuckets = gamestate.findBuckets(player);
-
-	player.displacement = InputProcessing.processMovementInput(input, player);
-	player.updateRange();
-
-	let postUpdateBuckets = gamestate.findBuckets(player);
-	if (gamestate.areBucketsDifferent(preUpdateBuckets, postUpdateBuckets)) {
-		gamestate.spatialHash.update(player);
-	}
+	InputProcessing.processMovementInput(input, player);
 };
 
 
@@ -73,34 +67,26 @@ var processBaseInput = function(input, player, gamestate){
 	}
 
 	if (input.isMouseRightButtonClicked) {
-		let nodeRange ={
-   				x: input.mousePosition.x-50,
-    			y: input.mousePosition.y-50,
-    			width: 100,
-    			height: 100
-		}
-		
-		let nodeIntersectList = gamestate.spatialHash.query(nodeRange, function(item) { return item instanceof ServerNode; });
-		
-		let cursorRange ={
-   				x: input.mousePosition.x,
-    			y: input.mousePosition.y,
-    			width: 1,
-    			height: 1
-		}
-		let cursorIntersectList = gamestate.spatialHash.query(cursorRange, function(item) { return (item instanceof ServerNode && item.ownerID === player.id); });
-		
-		if (cursorIntersectList.length > 0){
-			if (player.selectedNode === cursorIntersectList[0])
+		let part = Collision.getClickedPart(gamestate.engine,
+										input.mousePosition.x, 
+										input.mousePosition.y);
+		//console.log(part!==null);
+		if (part){
+			if (part.object === player.selectedNode && player.selectedNode!==null){
 				player.setSelectedNode(null);
-			else player.setSelectedNode(cursorIntersectList[0]);
+			}
+			else if (part.object instanceof Node && part.object.ownerID === player.id){
+				player.setSelectedNode(part.object);
+			}
 		}
-
-		else if (nodeIntersectList.length === 0){
-			if (player.base === null)
-				gamestate.addNode(new Vector2D(input.mousePosition.x, input.mousePosition.y), player);
-			else if (player.selectedNode !== null)
-				gamestate.addNode(new Vector2D(input.mousePosition.x, input.mousePosition.y), player);
+		
+		else{
+			let node = new ServerNode(null, new Vector2D(0,0), new Vector2D(input.mousePosition.x, input.mousePosition.y), null, []);
+			if (Collision.isEmptySpace(gamestate.engine, node.body)){
+				if (player.base===null || player.selectedNode !== null){
+					gamestate.addNode(new Vector2D(input.mousePosition.x, input.mousePosition.y), player);
+				}
+			}
 		}
 	}
 };

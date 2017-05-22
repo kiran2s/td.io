@@ -3,11 +3,22 @@
 var uuid = require('node-uuid');
 var GameState = require('../shared/GameState');
 var ServerPlayer = require('./ServerPlayer');
+var Player = require('../shared/Player');
+var Bullet = require('../shared/Bullet');
+var Node = require('../shared/Node');
+var Collectible = require('../shared/Collectible');
 var ServerCollectible = require('./ServerCollectible');
 var ServerNode = require('./ServerNode');
 var Vector2D = require('../lib/Vector2D');
 var SpatialHash = require('spatial-hash');
 var Globals = require('../lib/Globals');
+var Matter = require('matter-js');
+var Engine = Matter.Engine,
+    Render = Matter.Render,
+    World = Matter.World,
+    Bodies = Matter.Bodies,
+    Events = Matter.Events;
+var Collision = require('../shared/Collision');
 
 class ServerGameState extends GameState {
     constructor(worldWidth, worldHeight) {
@@ -16,13 +27,14 @@ class ServerGameState extends GameState {
 		this.players = {};
 		this.bullets = {};
 		this.collectibles = {};
-		this.spatialHash = new SpatialHash( { x: 0, y: 0, width: this.worldWidth, height: this.worldHeight }, 160); //new spatial-hash
-
+		
 		for (let i = 0; i < 100; i++) {
 			let cX = Math.floor(Math.random() * worldWidth);
 			let cY = Math.floor(Math.random() * worldHeight);
 			this.addCollectible(uuid(), cX, cY);
 		}
+
+		this.initCollisions();
 	}
 
 	addPlayer(id) {
@@ -33,27 +45,28 @@ class ServerGameState extends GameState {
 			'rgba(0,180,255,1)'
 		);
 		this.players[id] = player;
-		this.spatialHash.insert(player);
+		World.add(this.engine.world, player.body);
 	}
 
 	deletePlayer(id) {
 		if (this.players[id].base !== null)
 			this.deleteBranch(this.players[id].base, id);
 		this.deleteGameObject(this.players, id);
+		
 	}
 
 	addBullet(id, player) {
 		let bullet = player.fireWeapon(id);
 		if (bullet !== null) {
 			this.bullets[id] = bullet;
-			this.spatialHash.insert(bullet);
+			World.add(this.engine.world, bullet.body);
 		}
 	}
 
 	addNode(position, player){
 		let node = player.buildNode(position);
 		if (node !== null)
-			this.spatialHash.insert(node);
+			World.add(this.engine.world, node.body);
 	}
 
 	deleteBranch(node, playerID){
@@ -63,7 +76,7 @@ class ServerGameState extends GameState {
 	}
 
 	_deleteBranch(node){
-		this.spatialHash.remove(node);
+		World.remove(this.engine.world, node.body);
 		for (var i =0; i<node.children.length; i++){
 			this._deleteBranch(node.children[i]);
 		}
@@ -77,7 +90,7 @@ class ServerGameState extends GameState {
 	addCollectible(id, x, y) {
 		let collectible = new ServerCollectible(id, new Vector2D(x, y));
 		this.collectibles[id] = collectible;
-		this.spatialHash.insert(collectible);
+		World.add(this.engine.world, collectible.body)
 	}
 
 	deleteCollectible(id) {
@@ -86,7 +99,7 @@ class ServerGameState extends GameState {
 
 	deleteGameObject(gameObjects, id) {
 		if (id in gameObjects) {
-			this.spatialHash.remove(gameObjects[id]);
+			World.remove(this.engine.world, gameObjects[id].body);
 			delete gameObjects[id];
 		}
 	}
@@ -94,13 +107,8 @@ class ServerGameState extends GameState {
 	updateGameObjects(gameObjects, deltaTime) {
 		for (let id in gameObjects) {
 			let gameObject = gameObjects[id];
-			if (this.isWithinGameWorld(gameObject.position) && !(gameObject.isExpired !== undefined && gameObject.isExpired())) {
-				let preUpdateBuckets = this.findBuckets(gameObject);
+			if (!(gameObject.isExpired !== undefined && gameObject.isExpired())) {
 				gameObject.update(deltaTime);
-				let postUpdateBuckets = this.findBuckets(gameObject);
-				if (this.areBucketsDifferent(preUpdateBuckets, postUpdateBuckets)) {
-					this.spatialHash.update(gameObject);
-				}
 			}
 			else {
 				this.deleteGameObject(gameObjects, id);
@@ -116,121 +124,37 @@ class ServerGameState extends GameState {
 		this.updateGameObjects(this.collectibles, deltaTime);
 	}
 
-	detectCollisions() {
-		this._detectCollisions(
-			this.bullets, 
-			'ServerCollectible', 
-			function(bullet, collectible) {
-				collectible.takeDamage(bullet.damage);
-				if (collectible.health <= 0) {
-					this.deleteCollectible(collectible.id);
-				}
-				else {
-					this.deleteBullet(bullet.id);
-				}
-			}.bind(this)
-		);
 
-		this._detectCollisions(
-			this.players, 
-			'ServerCollectible', 
-			function(player, collectible) {
-				collectible.takeDamage(player.damage);
-				if (collectible.health <= 0) {
-					this.deleteCollectible(collectible.id);
-				}
-				player.takeDamage(collectible.damage);
-				if (player.health <= 0) {
-					this.deletePlayer(player.id);
-				}
-			}.bind(this)
-		);
-
-		this._detectCollisions(
-			this.bullets, 
-			'ServerNode', 
-			function(bullet, node) {
-				if (bullet.ownerID === node.ownerID){
-					return;
-				}
-				let damageFormula = 0.1*(bullet.damage / Math.log2(1+this.players[node.ownerID].baseSize) / Math.log2(1+node.getTreeSize()) + node.distanceFromRoot);
-				if (node.parent===null) node.takeDamage(0.5*damageFormula);
-				else node.takeDamage(damageFormula); //formula for base damage
-				if (node.health <= 0) {
-					this.deleteBranch(node, node.ownerID);
-				}
-				else {
-					this.deleteBullet(bullet.id);
-				}
-			}.bind(this)
-		);
-
-		this._detectCollisions(
-			this.players,
-			'ServerBullet',
-			function(player, bullet) {
-				if (player.id === bullet.ownerID) {
-					return;
-				}
-				player.takeDamage(bullet.damage);
-				if (player.health <= 0) {
-					this.deletePlayer(player.id);
-					return;
-				}
-				this.deleteBullet(bullet.id);
-			}.bind(this)
-		)
-	}
-
-	// collideCallback(collider, collidee)
-	_detectCollisions(colliders, collideeConstructorName, collideCallback) {
-		for (let id in colliders) {
-			let collider = colliders[id];
-			let intersectList = this.spatialHash.query(collider.range, function(item) { return item.constructor.name === collideeConstructorName; });
-			if (intersectList.length > 0) {
-				let collidee = intersectList[0];
-				collideCallback(collider, collidee);
+	initCollisions(){
+		var gamestate = this;
+		Events.on(this.engine, 'collisionActive', function(data){	
+			for(let i in data.pairs){
+				let pair = data.pairs[i];
+				let bodyA = pair.bodyA;
+				let bodyB = pair.bodyB;
+				//console.log(bodyA.object.constructor.name + " "+ bodyB.object.constructor.name);
+				if (bodyA.object instanceof Player && bodyB.object instanceof Collectible)
+					Collision.playerCollectibleCollision(gamestate, bodyA.object, bodyB.object);
+				else if (bodyB.object instanceof Player && bodyA.object instanceof Collectible)
+					Collision.playerCollectibleCollision(gamestate, bodyB.object, bodyA.object);
+				else if (bodyA.object instanceof Bullet && bodyB.object instanceof Player)
+					Collision.bulletPlayerCollision(gamestate, bodyA.object, bodyB.object);
+				else if (bodyB.object instanceof Bullet && bodyA.object instanceof Player)
+					Collision.bulletPlayerCollision(gamestate, bodyB.object, bodyA.object);
+				else if (bodyA.object instanceof Bullet && bodyB.object instanceof Collectible)
+					Collision.bulletCollectibleCollision(gamestate, bodyA.object, bodyB.object);
+				else if (bodyB.object instanceof Bullet && bodyA.object instanceof Collectible)
+					Collision.bulletCollectibleCollision(gamestate, bodyB.object, bodyA.object);
+				else if (bodyA.object instanceof Bullet && bodyB.object instanceof Node)
+					Collision.bulletNodeCollision(gamestate, bodyA.object, bodyB.object);
+				else if (bodyB.object instanceof Bullet && bodyA.object instanceof Node)
+					Collision.bulletNodeCollision(gamestate, bodyB.object, bodyA.object);
+				// else if (bodyB.object instanceof Bullet && bodyA.object instanceof Bullet)
+				// 	Collision.bulletBulletCollision(gamestate, pair);
 			}
-		}
+		});
 	}
 	
-	isWithinGameWorld(position) {
-		return 	position.x > 0 && position.x < this.worldWidth &&
-				position.y > 0 && position.y < this.worldHeight;
-	}
-
-	findBuckets(gameObject) {
-		let bucketSize = this.spatialHash.cellSize; //new spatial-hash
-		let positionX = gameObject.position.x;
-		let positionY = gameObject.position.y;
-		let halfWidth = gameObject.range.width/2; //new spatial-hash
-		let halfHeight = gameObject.range.height/2; //new spatial-hash
-
-		let firstBucketX = Math.floor((positionX - halfWidth) / bucketSize);
-		let lastBucketX = Math.floor((positionX + halfWidth) / bucketSize);
-		let firstBucketY = Math.floor((positionY - halfHeight) / bucketSize);
-		let lastBucketY = Math.floor((positionY + halfHeight) / bucketSize);
-
-		return { bucketsX: [ firstBucketX, lastBucketX ], bucketsY: [ firstBucketY, lastBucketY ] };
-	}
-
-	areBucketsDifferent(b1, b2) {
-		return 	b1.bucketsX[0] !== b2.bucketsX[0] ||
-				b1.bucketsX[1] !== b2.bucketsX[1] ||
-				b1.bucketsY[0] !== b2.bucketsY[0] ||
-				b1.bucketsY[1] !== b2.bucketsY[1];
-	}
-
-	// cellContents(x,y,selector){
-	// 	let i = ~~((y-this.spatialHash.range.y) / this.cellSize)
- //        let j = ~~((x-this.spatialHash.range.x) / this.cellSize)
- //        let selected = [];
- //        let contents = this.hash[i][j];
- //        for (var k=0; k<contents.length; k++)
- //        	if selector(contents[k])
- //        		selected.push(contents[k]);
- //        return selected;
- //    }
 }
 
 module.exports = ServerGameState;

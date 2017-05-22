@@ -10,6 +10,8 @@ var GameStateUpdate = require('../shared/GameStateUpdate');
 var SocketState = require('./SocketState');
 var Globals = require('../lib/Globals');
 var ServerInputProcessing = require('./ServerInputProcessing');
+var Matter = require('matter-js');
+var Engine = Matter.Engine;
 
 class Server {
 	constructor() {
@@ -156,7 +158,7 @@ class Server {
 
 		this.gamestate.updateBullets(deltaTime);
 		this.gamestate.updateCollectibles(deltaTime);
-		this.gamestate.detectCollisions();
+		Engine.update(this.gamestate.engine, deltaTime*1000);
 	}
 
 	updateClients() {

@@ -1,5 +1,8 @@
 var Globals = require('../lib/Globals');
 var Vector2D = require('../lib/Vector2D');
+var Matter = require('matter-js');
+var Body = Matter.Body, 
+	Vector = Matter.Vector;
 
 var DIAG_ACCEL_FACTOR = Math.cos(Math.PI/4);
 
@@ -47,28 +50,32 @@ var processMovementInput = function(input, player){
 				break;
 		}
 	}
-
+	//console.log(player.body.speed);
 	if (none){
-		if (player.velocity.getLength() < player.minSpeed) {
-			player.velocity.set(0, 0);
+		if (player.body.speed < player.minSpeed) {
+			Body.setVelocity(player.body, new Vector2D(0,0));
 		}
+
 		else {
 			accelerationVec.copy(player.velocity)
 						.setLength(player.deceleration)
 						.neg();
 		}
 	}
+	// console.log("ACCEL"+accelerationVec.getLength());
+	// console.log("DELTA"+input.deltaTime);
+	// console.log("VELOC"+input.deltaTime);
 
-	player.velocity.add(new Vector2D().copy(accelerationVec).mul(input.deltaTime));
-	if (player.velocity.getLength() > player.maxSpeed) {
-		player.velocity.setLength(player.maxSpeed);
-	}
+
 	
-	let displacement = new Vector2D().copy(player.velocity).mul(input.deltaTime);
-	player.position.add(displacement);
+	let velocity = new Vector2D().copy(accelerationVec).mul(input.deltaTime).add(player.velocity);
+	//console.log("NEW VELOC"+velocity.getLength());
+	if (velocity.getLength() > player.maxSpeed) {
+		velocity.setLength(player.maxSpeed);
+	}
+	Body.setVelocity(player.body, velocity);
 	player.orientation = convertToOrientation(input.mouseDirection);
 
-	return displacement;
 };
 
 

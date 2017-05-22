@@ -134,6 +134,7 @@ class Client {
 		if (this.gamestate !== null){
 			InputProcessing.processInput(inputUpdate, this.gamestate.player, this.gamestate);
 		}
+		
 		/*
 		else {
 			if (inputUpdate.isMouseLeftButtonDown || 'space' in inputUpdate.keysPressed) {

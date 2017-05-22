@@ -4,19 +4,22 @@ var Collectible = require('../shared/Collectible');
 var Collidable = require('./Collidable');
 var Vector2D = require('../lib/Vector2D');
 var Globals = require('../lib/Globals');
+var Matter = require('matter-js');
+var Body = Matter.Body;
 
 class ServerCollectible extends Collectible {
-	constructor(id, position, health = 100, damage = 10, speed = 10) {
+	constructor(id, position, health = 100, damage = 10, speed = 1/4) {
 		super(position, health);
 		Collidable.call(this);
 
 		this.id = id;
-		this.velocity = new Vector2D(0, 0);
 		this.movementAngle = this.orientation;
 		this.movementSpread = Math.PI/16;
 		this.rotationSpeed = 1;
 		this.damage = damage;
 		this.speed = speed;
+		this.body.object = this;
+
 	}
 
 	getUpdateProperties() {
@@ -38,15 +41,16 @@ class ServerCollectible extends Collectible {
 		else if (this.movementAngle < 0) {
 			this.movementAngle += Globals.DEGREES_360
 		}
-		this.velocity.set(Math.cos(this.movementAngle), Math.sin(this.movementAngle)).setLength(this.speed);
-		let displacement = new Vector2D().copy(this.velocity).mul(deltaTime);
-		this.position.add(displacement);
+		
 		this.orientation += this.rotationSpeed * deltaTime;
 		if (this.orientation > Globals.DEGREES_360) {
 			this.orientation -= Globals.DEGREES_360;
 		}
 
-		this.updateRange();
+		let velocity = new Vector2D(Math.cos(this.movementAngle), Math.sin(this.movementAngle)).setLength(this.speed);
+		Body.setVelocity(this.body, velocity);
+		// this.body.applyForce()
+
 	}
 }
 

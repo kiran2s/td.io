@@ -5,10 +5,12 @@ var Collidable = require('./Collidable');
 var Vector2D = require('../lib/Vector2D');
 var Globals = require('../lib/Globals');
 var underscore = require('underscore');
+var Matter = require('matter-js');
+var Body = Matter.Body;
 
 class ServerNode extends Node {
 	constructor(ownerID, velocity, position, parent, children, radius = 50, health = 100, color = "red", outlineColor = 'rgba(80,80,80,1)') {
-		super(position, parent, children, radius, health, color, outlineColor);
+		super(ownerID, position, velocity, parent, children, radius, health, color, outlineColor);
 		Collidable.call(this);
 		var _children = [];
 		for (var i = 0; i<this.children.length; i++){
@@ -22,18 +24,16 @@ class ServerNode extends Node {
 										this.children[i].color, 
 										this.children[i].outlineColor));
 		}
-		this.ownerID = ownerID;
 		this.children = _children;
-		this.velocity = velocity;
 		this._copy = null;
+		this.body.object = this;
 	}
 
 	getUpdateProperties(fullUpdate) { 
 		if (fullUpdate===false) 
 			return this.getModifiedUpdateProperties();
 		else 
-			return this.getFullUpdateProperties();
-			
+			return this.getFullUpdateProperties();	
 	}
 
 	getFullUpdateProperties(){
@@ -42,7 +42,7 @@ class ServerNode extends Node {
 			_children[this.children[i].id] = this.children[i].getFullUpdateProperties();
 		}
 
-		this._copy = {
+		return {
 			position: this.position,
 			radius: this.radius,
 			health: this.health,
@@ -51,7 +51,6 @@ class ServerNode extends Node {
 			children: _children,
 			id: this.id
 		};
-		return this._copy;
 	}
 
 	getModifiedUpdateProperties() { 
@@ -62,7 +61,7 @@ class ServerNode extends Node {
 
 		if (this._copy === null){
 			this._copy = {
-				position: this.position,
+				position: Globals.clone(this.position),
 				radius: this.radius,
 				health: this.health,
 				color: this.color,
@@ -71,13 +70,13 @@ class ServerNode extends Node {
 				id: this.id
 			};
 			return this._copy;
-
 		}
+
 		else {
 			let update = {};
 			for (let i in this._copy){
 				if (i !== 'children' && i !== 'id' && !underscore.isEqual(this._copy[i], this[i])){
-					this._copy[i] = this[i];
+					this._copy[i] = Globals.clone(this[i]);
 					update[i] = this[i];
 				}
 			}
@@ -95,7 +94,6 @@ class ServerNode extends Node {
 
 	_update(displacement){
 		this.position.add(displacement);
-		this.updateRange();
 		for (var i = 0; i<this.children.length; i++){
 			this.children[i]._update(displacement);
 		}
