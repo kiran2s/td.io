@@ -14,7 +14,7 @@ var Body = Matter.Body;
 const DIAG_ACCEL_FACTOR = Math.cos(Math.PI/4);
 
 class ServerPlayer extends Player {
-	constructor(id, velocity, position, color) {
+	constructor(collisionID, id, velocity, position, color) {
 		super(velocity, position, color);
 		Collidable.call(this);
 
@@ -27,7 +27,7 @@ class ServerPlayer extends Player {
 		this.radius = this.size/2;
 		this.orientation = 0;
 		this.health = 100;
-
+		this.collisionID = collisionID;
 		this.weapon = ServerWeaponFactory.makePlebPistol(this.radius);
 		this.damage = 100;
 		this.base = null; 
@@ -36,6 +36,7 @@ class ServerPlayer extends Player {
 		this.autoFire = false;
 		this.body.object = this;
 		Body.setMass(this.body, 10000);
+		this.body.collisionFilter.category = this.collisionID;
 	}
 
 	getUpdateProperties(liteVersion, fullUpdate) {
@@ -124,7 +125,7 @@ class ServerPlayer extends Player {
 	}
 
 	fireWeapon(id) {
-		return this.weapon.fire(id, this.id, this.orientation, this.position);
+		return this.weapon.fire(id, this.id, this, this.orientation, this.position);
 	}
 }
 

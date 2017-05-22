@@ -144,7 +144,7 @@ var bulletNodeCollision = function(gamestate, bullet, node){
 	}
 };
 
-var bulletPlayerCollision = function(gamestate, bullet, player){
+var bulletPlayerCollision = function(gamestate, bullet, player, pair){
 	if (player.id === bullet.ownerID) {
 		return;
 	}
@@ -160,7 +160,6 @@ var bulletBulletCollision = function(gamestate, pair){
 	let bullet1 = pair.bodyA.object;
 	let bullet2 = pair.bodyB.object;
 	if (bullet1.ownerID === bullet2.ownerID) {
-		console.log("UH OH");
 		Pair.setActive(pair, false, gamestate.engine.timing.timestamp);
 	}
 };

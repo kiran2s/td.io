@@ -17,6 +17,7 @@ var Engine = Matter.Engine,
     Render = Matter.Render,
     World = Matter.World,
     Bodies = Matter.Bodies,
+    Body = Matter.Body,
     Events = Matter.Events;
 var Collision = require('../shared/Collision');
 
@@ -39,6 +40,7 @@ class ServerGameState extends GameState {
 
 	addPlayer(id) {
 		let player = new ServerPlayer(
+			Body.nextCategory(),
 			id,
 			new Vector2D(0, 0),
 			new Vector2D(this.worldWidth/2, this.worldHeight/2),
@@ -146,9 +148,9 @@ class ServerGameState extends GameState {
 				else if (bodyB.object instanceof Player && bodyA.object instanceof Collectible)
 					Collision.playerCollectibleCollision(gamestate, bodyB.object, bodyA.object);
 				else if (bodyA.object instanceof Bullet && bodyB.object instanceof Player)
-					Collision.bulletPlayerCollision(gamestate, bodyA.object, bodyB.object);
+					Collision.bulletPlayerCollision(gamestate, bodyA.object, bodyB.object, pair);
 				else if (bodyB.object instanceof Bullet && bodyA.object instanceof Player)
-					Collision.bulletPlayerCollision(gamestate, bodyB.object, bodyA.object);
+					Collision.bulletPlayerCollision(gamestate, bodyB.object, bodyA.object, pair);
 				else if (bodyA.object instanceof Bullet && bodyB.object instanceof Collectible)
 					Collision.bulletCollectibleCollision(gamestate, bodyA.object, bodyB.object);
 				else if (bodyB.object instanceof Bullet && bodyA.object instanceof Collectible)
