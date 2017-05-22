@@ -21,9 +21,9 @@ $ npm install socket.io --save
 $ npm install node-uuid --save
 ```
 
-#### Step 5: Install SpatialHash
+#### Step 5: Install Matter.js
 ```
-$ npm install spatial-hash --save
+$ npm install matter-js --save
 ```
 
 #### Step 6: Install Browserify
