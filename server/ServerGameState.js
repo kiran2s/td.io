@@ -124,6 +124,14 @@ class ServerGameState extends GameState {
 		this.updateGameObjects(this.collectibles, deltaTime);
 	}
 
+	updatePlayers(deltaTime){
+		for (let id in this.players){
+			if (this.players[id].autoFire){
+				this.addBullet(uuid(), this.players[id]);
+			}
+		}
+	}
+
 
 	initCollisions(){
 		var gamestate = this;

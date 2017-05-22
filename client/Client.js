@@ -134,7 +134,7 @@ class Client {
 		if (this.gamestate !== null){
 			InputProcessing.processInput(inputUpdate, this.gamestate.player, this.gamestate);
 		}
-		
+
 		/*
 		else {
 			if (inputUpdate.isMouseLeftButtonDown || 'space' in inputUpdate.keysPressed) {
@@ -227,6 +227,9 @@ class Client {
 		}
 		if (this.keyboard.pressed('F')) {
 			keys['F'] = true;
+		}
+		if (this.keyboard.pressed('E')) {
+			keys['E'] = true;
 		}
 		if (this.keyboard.pressed('space')) {
 			keys['space'] = true;

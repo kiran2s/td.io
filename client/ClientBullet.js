@@ -6,7 +6,7 @@ var Globals = require('../lib/Globals');
 
 class ClientBullet extends Bullet {
 	constructor(position, radius = 7, health = 1, color = "black", outlineColor = 'rgba(80,80,80,1)') {
-		super(new Vector2D(position.x, position.y), radius, health, color, outlineColor);
+		super(new Vector2D(position.x, position.y), new Vector2D(0,0), radius, health, color, outlineColor);
 	}
 	
 	draw(ctx, transformToCameraCoords) {

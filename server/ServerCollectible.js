@@ -48,9 +48,10 @@ class ServerCollectible extends Collectible {
 		}
 
 		let velocity = new Vector2D(Math.cos(this.movementAngle), Math.sin(this.movementAngle)).setLength(this.speed);
-		Body.setVelocity(this.body, velocity);
+		if (this.body.speed <= this.speed){
+			Body.setVelocity(this.body, velocity);//only set its velocity after collision effect is over
+		}
 		// this.body.applyForce()
-
 	}
 }
 

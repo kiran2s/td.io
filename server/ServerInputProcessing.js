@@ -45,7 +45,7 @@ var processWeaponInput = function(input, player, gamestate){
 		}
 	}
 	// Fire bullets
-	if (input.isMouseLeftButtonDown) {
+	if (input.isMouseLeftButtonDown && !player.autoFire) {
 		gamestate.addBullet(uuid(), player);
 	}
 };
@@ -60,9 +60,13 @@ var processBaseInput = function(input, player, gamestate){
 	for (let i in input.keysClicked){
 		switch (i) {
 				case 'F':
-				if (player.selectedNode !== null && 
-					player.selectedNode.isHealthy())
-					gamestate.deleteBranch(player.selectedNode, player.id);
+					if (player.selectedNode !== null && 
+						player.selectedNode.isHealthy())
+						gamestate.deleteBranch(player.selectedNode, player.id);
+					break;
+				case 'E':
+					player.autoFire = player.autoFire ? false : true;
+					break;
 		}
 	}
 

@@ -33,6 +33,7 @@ class ServerPlayer extends Player {
 		this.base = null; 
 		this.baseSize = 0;
 		this.selectedNode = null;
+		this.autoFire = false;
 		this.body.object = this;
 		Body.setMass(this.body, 10000);
 	}

@@ -158,6 +158,7 @@ class Server {
 
 		this.gamestate.updateBullets(deltaTime);
 		this.gamestate.updateCollectibles(deltaTime);
+		this.gamestate.updatePlayers(deltaTime);
 		Engine.update(this.gamestate.engine, deltaTime*1000);
 	}
 

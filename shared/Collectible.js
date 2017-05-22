@@ -12,14 +12,10 @@ class Collectible extends GameObject {
 		this.orientation = Math.random() * Globals.DEGREES_360;
 		this.health = health;
 		this.outlineColor = 'rgba(80,80,80,1)';
-		this.body = Bodies.circle(position.x, position.y, 10, {frictionAir:0});
-		Body.setMass(this.body, 100);
+		this.body = Bodies.circle(position.x, position.y, 10, {frictionAir:0.6});
+		Body.setMass(this.body, 1000);
 		this.position = this.body.position;
 		this.velocity = this.body.velocity;
-
-
-
-		
 	}
 }
 

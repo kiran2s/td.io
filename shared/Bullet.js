@@ -11,9 +11,9 @@ class Bullet extends GameObject {
 		this.radius = radius;
 		this.health = health;
 		this.outlineColor = outlineColor;
-		this.body = Bodies.circle(position.x, position.y, radius, {frictionAir:0});
+		this.body = Bodies.circle(position.x, position.y, radius, {frictionAir:0, friction:0});
 		this.position = this.body.position;
-		Body.setVelocity(this.body, velocity.div(100));
+		Body.setVelocity(this.body, velocity);
 		this.velocity = this.body.velocity;
 		
 	}
