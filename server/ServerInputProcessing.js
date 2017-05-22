@@ -85,7 +85,7 @@ var processBaseInput = function(input, player, gamestate){
 		}
 		
 		else{
-			let node = new ServerNode(null, new Vector2D(0,0), new Vector2D(input.mousePosition.x, input.mousePosition.y), null, []);
+			let node = new ServerNode(null, new Vector2D(input.mousePosition.x, input.mousePosition.y), null, []);
 			if (Collision.isEmptySpace(gamestate.engine, node.body)){
 				if (player.base===null || player.selectedNode !== null){
 					gamestate.addNode(new Vector2D(input.mousePosition.x, input.mousePosition.y), player);

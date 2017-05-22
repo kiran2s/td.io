@@ -7,7 +7,7 @@ var Bodies = Matter.Bodies,
 	Body = Matter.Body;
 
 class Node extends GameObject{
-	constructor(ownerID, position, velocity, parent, children, radius, health, color, outlineColor, id = uuid(), maxChildren = 2, maxLengthToChildren = 500, minLengthToChildren = 0) {
+	constructor(ownerID, position, parent, children, radius, health, color, outlineColor, id = uuid(), maxChildren = 2, maxLengthToChildren = 500, minLengthToChildren = 0) {
 		super(position, radius*2, color);
 		this.radius = radius; 
 		this.id = id;
@@ -26,10 +26,10 @@ class Node extends GameObject{
 		else this.distanceFromRoot = parent.distanceFromRoot + 1;
 		this.body = Bodies.circle(position.x, position.y, radius, {isStatic: true});
 		this.position = this.body.position;
-		Body.setVelocity(this.body, velocity);
-		this.velocity = this.body.velocity;
+		// Body.setVelocity(this.body, velocity);
+		// this.velocity = this.body.velocity;
 		this.ownerID = ownerID;
-		
+
 	}
 
 	addParent(node){

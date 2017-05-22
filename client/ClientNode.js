@@ -7,11 +7,12 @@ var HealthBar = require('./HealthBar');
 
 
 class ClientNode extends Node{
-	constructor(position, parent, children, radius, health, color, outlineColor, id) {
-		super(new Vector2D(position.x, position.y), parent, children, radius, health, color, outlineColor, id);
+	constructor(ownerID, position, parent, children, radius, health, color, outlineColor, id) {
+		super(ownerID, new Vector2D(position.x, position.y), parent, children, radius, health, color, outlineColor, id);
 		var _children = [];
 		for (let i in this.children){
-			_children.push(new ClientNode(this.children[i].position, //recursively generate all child Nodes
+			_children.push(new ClientNode(this.ownerID,
+										this.children[i].position, //recursively generate all child Nodes
 										this, 
 										this.children[i].children,
 										this.children[i].radius, 
@@ -55,7 +56,8 @@ class ClientNode extends Node{
 			if (nodeUpdate.children[k]._checked === undefined){
 				//console.log(k + " is not checked!");
 				//console.log(k);
-				this.children.push(new ClientNode(nodeUpdate.children[k].position, 
+				this.children.push(new ClientNode(nodeUpdate.children[k].ownerID, 
+												nodeUpdate.children[k].position, 
 												this,
 												nodeUpdate.children[k].children,
 												nodeUpdate.children[k].radius,

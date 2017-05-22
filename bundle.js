@@ -636,11 +636,12 @@ var HealthBar = require('./HealthBar');
 
 
 class ClientNode extends Node{
-	constructor(position, parent, children, radius, health, color, outlineColor, id) {
-		super(new Vector2D(position.x, position.y), parent, children, radius, health, color, outlineColor, id);
+	constructor(ownerID, position, parent, children, radius, health, color, outlineColor, id) {
+		super(ownerID, new Vector2D(position.x, position.y), parent, children, radius, health, color, outlineColor, id);
 		var _children = [];
 		for (let i in this.children){
-			_children.push(new ClientNode(this.children[i].position, //recursively generate all child Nodes
+			_children.push(new ClientNode(this.ownerID,
+										this.children[i].position, //recursively generate all child Nodes
 										this, 
 										this.children[i].children,
 										this.children[i].radius, 
@@ -684,7 +685,8 @@ class ClientNode extends Node{
 			if (nodeUpdate.children[k]._checked === undefined){
 				//console.log(k + " is not checked!");
 				//console.log(k);
-				this.children.push(new ClientNode(nodeUpdate.children[k].position, 
+				this.children.push(new ClientNode(nodeUpdate.children[k].ownerID, 
+												nodeUpdate.children[k].position, 
 												this,
 												nodeUpdate.children[k].children,
 												nodeUpdate.children[k].radius,
@@ -804,7 +806,7 @@ class ClientPlayer extends Player {
 		let base = playerUpdateProperties.base;
 		if (base !== null){
 			if (this.base === null){
-				this.base = new ClientNode(base.position, null, base.children, base.radius, base.health, base.color, base.outlineColor, base.id);
+				this.base = new ClientNode(base.ownerID, base.position, null, base.children, base.radius, base.health, base.color, base.outlineColor, base.id);
 			}
 			else{
 				this.base.setUpdateProperties(base);
@@ -940,7 +942,7 @@ class OtherPlayer extends GameObject {
         this.weapon = new ClientWeapon(weapon.name, weapon.distanceFromPlayer, weapon.size, weapon.color, weapon.outlineColor);
         this.outlineColor = outlineColor;
         if (base !== null)
-			this.base = new ClientNode(base.position, null, base.children, base.radius, base.health, base.color, base.outlineColor, base.id);
+			this.base = new ClientNode(base.ownerID, base.position, null, base.children, base.radius, base.health, base.color, base.outlineColor, base.id);
 		else this.base = null;
 		this.healthBar = new HealthBar(new Vector2D(0, this.radius + 12), this.radius * 2.5);
     }
@@ -11957,7 +11959,7 @@ var Bodies = Matter.Bodies,
 	Body = Matter.Body;
 
 class Node extends GameObject{
-	constructor(ownerID, position, velocity, parent, children, radius, health, color, outlineColor, id = uuid(), maxChildren = 2, maxLengthToChildren = 500, minLengthToChildren = 0) {
+	constructor(ownerID, position, parent, children, radius, health, color, outlineColor, id = uuid(), maxChildren = 2, maxLengthToChildren = 500, minLengthToChildren = 0) {
 		super(position, radius*2, color);
 		this.radius = radius; 
 		this.id = id;
@@ -11976,10 +11978,10 @@ class Node extends GameObject{
 		else this.distanceFromRoot = parent.distanceFromRoot + 1;
 		this.body = Bodies.circle(position.x, position.y, radius, {isStatic: true});
 		this.position = this.body.position;
-		Body.setVelocity(this.body, velocity);
-		this.velocity = this.body.velocity;
+		// Body.setVelocity(this.body, velocity);
+		// this.velocity = this.body.velocity;
 		this.ownerID = ownerID;
-		
+
 	}
 
 	addParent(node){

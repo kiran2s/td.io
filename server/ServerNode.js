@@ -9,13 +9,12 @@ var Matter = require('matter-js');
 var Body = Matter.Body;
 
 class ServerNode extends Node {
-	constructor(ownerID, velocity, position, parent, children, radius = 50, health = 100, color = "red", outlineColor = 'rgba(80,80,80,1)') {
-		super(ownerID, position, velocity, parent, children, radius, health, color, outlineColor);
+	constructor(ownerID, position, parent, children, radius = 50, health = 100, color = "red", outlineColor = 'rgba(80,80,80,1)') {
+		super(ownerID, position, parent, children, radius, health, color, outlineColor);
 		Collidable.call(this);
 		var _children = [];
 		for (var i = 0; i<this.children.length; i++){
 			_children.push(new ServerNode(ownerID,
-										this.children[i].velocity,
 										this.children[i].position, //recursively generate all child ServerNodes
 										this, 
 										this.children[i].children,
@@ -43,6 +42,7 @@ class ServerNode extends Node {
 		}
 
 		return {
+			ownerID: this.ownerID,
 			position: this.position,
 			radius: this.radius,
 			health: this.health,
@@ -61,6 +61,7 @@ class ServerNode extends Node {
 
 		if (this._copy === null){
 			this._copy = {
+				ownerID: this.ownerID,
 				position: Globals.clone(this.position),
 				radius: this.radius,
 				health: this.health,
@@ -77,7 +78,7 @@ class ServerNode extends Node {
 			for (let i in this._copy){
 				if (i !== 'children' && i !== 'id' && !underscore.isEqual(this._copy[i], this[i])){
 					this._copy[i] = Globals.clone(this[i]);
-					update[i] = this[i];
+					update[i] = Globals.clone(this[i]);
 				}
 			}
 			update.children = _children;

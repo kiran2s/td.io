@@ -78,7 +78,7 @@ class ServerPlayer extends Player {
 	}
 
 	buildNode(position){
-		var node = new ServerNode(this.id, new Vector2D(0,0), position, null, []);
+		var node = new ServerNode(this.id, position, null, []);
 		if (this.base === null){
 			this.base = node; 
 			this.base.color = "blue";
@@ -90,7 +90,7 @@ class ServerPlayer extends Player {
 				dist < this.selectedNode.minLengthToChildren)
 				return null; //cannot build 
 
-			node = new ServerNode(this.id, new Vector2D(0,0), position, this.selectedNode, []);
+			node = new ServerNode(this.id, position, this.selectedNode, []);
 			this.selectedNode.addChild(node);
 			this.selectedNode.outlineColor = 'rgba(80,80,80,1)';
 			this.selectedNode = null;

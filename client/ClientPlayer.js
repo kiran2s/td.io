@@ -33,7 +33,7 @@ class ClientPlayer extends Player {
 		let base = playerUpdateProperties.base;
 		if (base !== null){
 			if (this.base === null){
-				this.base = new ClientNode(base.position, null, base.children, base.radius, base.health, base.color, base.outlineColor, base.id);
+				this.base = new ClientNode(base.ownerID, base.position, null, base.children, base.radius, base.health, base.color, base.outlineColor, base.id);
 			}
 			else{
 				this.base.setUpdateProperties(base);
