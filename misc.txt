@@ -1,0 +1,37 @@
+Past bugs:
+- setTranform affects clearing canvas
+
+- With baseline at ~0.3ms, drawing a massive base that fills the screen increases draw time to 
+  ~4-6 ms. Deleting the base causes draw time to move down to ~1.5 ms but never back to normal.
+
+-----------------------------------------------------------------------
+
+Performance:
+100 update loops
+100 collectibles
+
+no spatial hash:
+	baseline: 0-3ms
+	peak:     110ms
+	stream:   30-50ms
+	
+spatial hash:
+	baseline: 0-6ms (20-30ms when moving mouse around)
+	peak:     55ms
+	stream:   10-35ms
+- performance hit due to having to update hash objects
+	- amplifies when moving cursor around for some reason
+
+----------------------------------------------------------------------
+
+- d3-quadtree:
+var d3 = require("d3-quadtree");
+let data = [{ x: 1, y: 2, mask: 0 }, { x: 3, y: 4, mask: 0 }, { x: 3, y: 3, mask: 1 }];
+let tree = d3.quadtree()
+    .x(function(d) { return d.x; })
+    .y(function(d) { return d.y; })
+    .addAll(data);
+tree.x(function(d) { if (d.mask === 0) return d.x; })
+    .y(function(d) { if (d.mask === 0) return d.y; });
+let point = tree.find(3, 3, 3);
+console.log(point);
