@@ -2,8 +2,8 @@ var InputProcessing = require('../shared/InputProcessing');
 var Collision = require('../shared/Collision');
 var ServerWeapon = require('./ServerWeapon');
 var ServerPlayer = require('./ServerPlayer');
-var ServerNode = require('./ServerNode');
-var Node = require('../shared/Node');
+var ServerBaseNode = require('./ServerBaseNode');
+var BaseNode = require('../shared/BaseNode');
 var uuid = require('node-uuid');
 var Vector2D = require('../lib/Vector2D');
 
@@ -60,9 +60,9 @@ var processBaseInput = function(input, player, gamestate){
 	for (let i in input.keysClicked){
 		switch (i) {
 				case 'F':
-					if (player.selectedNode !== null && 
-						player.selectedNode.isHealthy())
-						gamestate.deleteBranch(player.selectedNode, player.id);
+					if (player.selectedBaseNode !== null && 
+						player.selectedBaseNode.isHealthy())
+						gamestate.deleteBranch(player.selectedBaseNode, player.id);
 					break;
 				case 'E':
 					player.autoFire = player.autoFire ? false : true;
@@ -76,19 +76,19 @@ var processBaseInput = function(input, player, gamestate){
 										input.mousePosition.y);
 		//console.log(part!==null);
 		if (part){
-			if (part.object === player.selectedNode && player.selectedNode!==null){
-				player.setSelectedNode(null);
+			if (part.object === player.selectedBaseNode && player.selectedBaseNode!==null){
+				player.setSelectedBaseNode(null);
 			}
-			else if (part.object instanceof Node && part.object.ownerID === player.id){
-				player.setSelectedNode(part.object);
+			else if (part.object instanceof BaseNode && part.object.ownerID === player.id){
+				player.setSelectedBaseNode(part.object);
 			}
 		}
 		
 		else{
-			let node = new ServerNode(null, new Vector2D(input.mousePosition.x, input.mousePosition.y), null, []);
+			let node = new ServerBaseNode(null, new Vector2D(input.mousePosition.x, input.mousePosition.y), null, []);
 			if (Collision.isEmptySpace(gamestate.engine, node.body)){
-				if (player.base===null || player.selectedNode !== null){
-					gamestate.addNode(new Vector2D(input.mousePosition.x, input.mousePosition.y), player);
+				if (player.base===null || player.selectedBaseNode !== null){
+					gamestate.addBaseNode(new Vector2D(input.mousePosition.x, input.mousePosition.y), player);
 				}
 			}
 		}

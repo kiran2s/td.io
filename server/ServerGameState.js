@@ -5,10 +5,10 @@ var GameState = require('../shared/GameState');
 var ServerPlayer = require('./ServerPlayer');
 var Player = require('../shared/Player');
 var Bullet = require('../shared/Bullet');
-var Node = require('../shared/Node');
+var BaseNode = require('../shared/BaseNode');
 var Collectible = require('../shared/Collectible');
 var ServerCollectible = require('./ServerCollectible');
-var ServerNode = require('./ServerNode');
+var ServerBaseNode = require('./ServerBaseNode');
 var Vector2D = require('../lib/Vector2D');
 var SpatialHash = require('spatial-hash');
 var Globals = require('../lib/Globals');
@@ -65,8 +65,8 @@ class ServerGameState extends GameState {
 		}
 	}
 
-	addNode(position, player){
-		let node = player.buildNode(position);
+	addBaseNode(position, player){
+		let node = player.buildBaseNode(position);
 		if (node !== null)
 			World.add(this.engine.world, node.body);
 	}
@@ -155,10 +155,10 @@ class ServerGameState extends GameState {
 					Collision.bulletCollectibleCollision(gamestate, bodyA.object, bodyB.object);
 				else if (bodyB.object instanceof Bullet && bodyA.object instanceof Collectible)
 					Collision.bulletCollectibleCollision(gamestate, bodyB.object, bodyA.object);
-				else if (bodyA.object instanceof Bullet && bodyB.object instanceof Node)
-					Collision.bulletNodeCollision(gamestate, bodyA.object, bodyB.object);
-				else if (bodyB.object instanceof Bullet && bodyA.object instanceof Node)
-					Collision.bulletNodeCollision(gamestate, bodyB.object, bodyA.object);
+				else if (bodyA.object instanceof Bullet && bodyB.object instanceof BaseNode)
+					Collision.bulletBaseNodeCollision(gamestate, bodyA.object, bodyB.object);
+				else if (bodyB.object instanceof Bullet && bodyA.object instanceof BaseNode)
+					Collision.bulletBaseNodeCollision(gamestate, bodyB.object, bodyA.object);
 				// else if (bodyB.object instanceof Bullet && bodyA.object instanceof Bullet)
 				// 	Collision.bulletBulletCollision(gamestate, pair);
 			}

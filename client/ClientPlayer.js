@@ -2,7 +2,7 @@
 
 var Player = require('../shared/Player');
 var ClientWeapon = require('./ClientWeapon');
-var ClientNode = require('./ClientNode');
+var ClientBaseNode = require('./ClientBaseNode');
 var HealthBar = require('./HealthBar');
 var Vector2D = require('../lib/Vector2D');
 var Globals = require('../lib/Globals');
@@ -33,7 +33,7 @@ class ClientPlayer extends Player {
 		let base = playerUpdateProperties.base;
 		if (base !== null){
 			if (this.base === null){
-				this.base = new ClientNode(base.ownerID, base.position, null, base.children, base.radius, base.health, base.color, base.outlineColor, base.id);
+				this.base = new ClientBaseNode(base.ownerID, base.position, null, base.children, base.radius, base.health, base.color, base.outlineColor, base.id);
 			}
 			else{
 				this.base.setUpdateProperties(base);

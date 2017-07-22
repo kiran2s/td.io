@@ -3,7 +3,7 @@
 var Player = require('../shared/Player');
 var Collidable = require('./Collidable');
 var ServerWeaponFactory = require('./ServerWeapon').ServerWeaponFactory;
-var ServerNode = require('./ServerNode');
+var ServerBaseNode = require('./ServerBaseNode');
 var Vector2D = require('../lib/Vector2D');
 var Globals = require('../lib/Globals');
 var Matter = require('matter-js');
@@ -32,7 +32,7 @@ class ServerPlayer extends Player {
 		this.damage = 100;
 		this.base = null; 
 		this.baseSize = 0;
-		this.selectedNode = null;
+		this.selectedBaseNode = null;
 		this.autoFire = false;
 		this.body.object = this;
 		Body.setMass(this.body, 10000);
@@ -78,23 +78,23 @@ class ServerPlayer extends Player {
 
 	}
 
-	buildNode(position){
-		var node = new ServerNode(this.id, position, null, []);
+	buildBaseNode(position){
+		var node = new ServerBaseNode(this.id, position, null, []);
 		if (this.base === null){
 			this.base = node; 
 			this.base.color = "blue";
 		}
-		if (this.selectedNode !== null ){
-			let dist = new Vector2D().copy(this.selectedNode.position).sub(position).getLength(); 
-			if (this.selectedNode.maxChildren === this.selectedNode.children.length ||
-				dist > this.selectedNode.maxLengthToChildren ||
-				dist < this.selectedNode.minLengthToChildren)
+		if (this.selectedBaseNode !== null ){
+			let dist = new Vector2D().copy(this.selectedBaseNode.position).sub(position).getLength(); 
+			if (this.selectedBaseNode.maxChildren === this.selectedBaseNode.children.length ||
+				dist > this.selectedBaseNode.maxLengthToChildren ||
+				dist < this.selectedBaseNode.minLengthToChildren)
 				return null; //cannot build 
 
-			node = new ServerNode(this.id, position, this.selectedNode, []);
-			this.selectedNode.addChild(node);
-			this.selectedNode.outlineColor = 'rgba(80,80,80,1)';
-			this.selectedNode = null;
+			node = new ServerBaseNode(this.id, position, this.selectedBaseNode, []);
+			this.selectedBaseNode.addChild(node);
+			this.selectedBaseNode.outlineColor = 'rgba(80,80,80,1)';
+			this.selectedBaseNode = null;
 		}
 		this.baseSize += node.getTreeSize();
 		
@@ -105,22 +105,22 @@ class ServerPlayer extends Player {
 	deleteBranch(node){
 		if (this.base === node){
 			this.base = null;
-			this.selectedNode = null;
+			this.selectedBaseNode = null;
 		}
 		else node.delete();
 		this.baseSize -= node.getTreeSize();
 		//console.log(this.baseSize);
 	}
 
-	setSelectedNode(node){
-		if (this.selectedNode !== null){
-				this.selectedNode.outlineColor = 'rgba(80,80,80,1)';
-				this.selectedNode = null;
+	setSelectedBaseNode(node){
+		if (this.selectedBaseNode !== null){
+				this.selectedBaseNode.outlineColor = 'rgba(80,80,80,1)';
+				this.selectedBaseNode = null;
 		}
-		//var node = this.findNode(this.base, this.selectedNodeID);
+		//var node = this.findBaseNode(this.base, this.selectedNodeID);
 		if (node !== null){
 			node.outlineColor = "yellow";
-			this.selectedNode = node;
+			this.selectedBaseNode = node;
 		}
 	}
 

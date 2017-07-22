@@ -2,7 +2,7 @@
 
 var Collectible = require('./Collectible');
 var Bullet = require('./Bullet');
-var Node = require('./Node');
+var BaseNode = require('./BaseNode');
 var Player = require('./Player');
 var Wall = require('./Wall');
 var Matter = require('matter-js');
@@ -129,11 +129,11 @@ var bulletCollectibleCollision = function(gamestate, bullet, collectible){
 	}
 };
 
-var bulletNodeCollision = function(gamestate, bullet, node){
+var bulletBaseNodeCollision = function(gamestate, bullet, node){
 	if (bullet.ownerID === node.ownerID){
 		return;
 	}
-	let damageFormula = 0.1*(bullet.damage / Math.log2(1+gamestate.players[node.ownerID].baseSize) / Math.log2(1+node.getTreeSize()) + node.distanceFromRoot);
+	let damageFormula = 0.1*(bullet.damage / Math.log2(1+gamestate.players[node.ownerID].baseSize) / Math.log2(1 + node.getTreeSize()) + node.distanceFromRoot);
 	if (node.parent===null) node.takeDamage(0.5*damageFormula);
 	else node.takeDamage(damageFormula); //formula for base damage
 	if (node.health <= 0) {
@@ -171,5 +171,5 @@ module.exports = {
 	playerCollectibleCollision: playerCollectibleCollision,
 	bulletCollectibleCollision: bulletCollectibleCollision,
 	bulletPlayerCollision: bulletPlayerCollision,
-	bulletNodeCollision: bulletNodeCollision
+	bulletBaseNodeCollision: bulletBaseNodeCollision
 };
