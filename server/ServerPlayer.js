@@ -16,10 +16,10 @@ class ServerPlayer extends Player {
 
 		this.id = id;
 		this.outlineColor = 'rgba(80,80,80,1)';
-		this.maxSpeed = 225;
-		this.minSpeed = 5;
-		this.acceleration = this.maxSpeed*0.8;
-		this.deceleration = this.maxSpeed*0.35;
+		this.maxSpeed = 260;
+		this.minSpeed = 4;
+		this.acceleration = this.maxSpeed*1.0;
+		this.deceleration = this.maxSpeed*0.7;
 		this.radius = this.size/2;
 		this.orientation = 0;
 		this.health = 100;
