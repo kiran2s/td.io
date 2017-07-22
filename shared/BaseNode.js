@@ -3,8 +3,8 @@
 var GameObject = require('./GameObject');
 var uuid = require('node-uuid');
 
-class Node extends GameObject{
-	constructor(position, parent, children, radius, health, color, outlineColor, id = uuid(), maxChildren = 2, maxLengthToChildren = 500, minLengthToChildren = 0) {
+class BaseNode extends GameObject{
+	constructor(ownerID, position, parent, children, radius, health, color, outlineColor, id = uuid(), maxChildren = 2, maxLengthToChildren = 500, minLengthToChildren = 0) {
 		super(position, radius*2, color);
 		this.radius = radius; 
 		this.id = id;
@@ -21,6 +21,12 @@ class Node extends GameObject{
 			this.maxChildren = 3;
 		}
 		else this.distanceFromRoot = parent.distanceFromRoot + 1;
+		this.body = Bodies.circle(position.x, position.y, radius, {isStatic: true});
+		this.position = this.body.position;
+		// Body.setVelocity(this.body, velocity);
+		// this.velocity = this.body.velocity;
+		this.ownerID = ownerID;
+
 	}
 
 	addParent(node){
@@ -52,10 +58,10 @@ class Node extends GameObject{
 		return this.health === 100;
 	}
 
-	// findNode(rt, id){
+	// findBaseNode(rt, id){
 	// 	if (rt.id === id) return rt;
 	// 	for (var i = 0; i < rt.children.length; i++){
-	// 		findNode(rt.children[i], id);
+	// 		findBaseNode(rt.children[i], id);
 	// 	}
 	// }
 
@@ -73,4 +79,4 @@ class Node extends GameObject{
 	}
 }
 
-module.exports = Node;
+module.exports = BaseNode;

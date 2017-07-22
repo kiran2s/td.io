@@ -4,7 +4,7 @@ var uuid = require('node-uuid');
 var GameState = require('../shared/GameState');
 var ServerPlayer = require('./ServerPlayer');
 var ServerCollectible = require('./ServerCollectible');
-var ServerNode = require('./ServerNode');
+var ServerBaseNode = require('./ServerBaseNode');
 var Vector2D = require('../lib/Vector2D');
 var SpatialHash = require('spatial-hash');
 var Globals = require('../lib/Globals');
@@ -50,8 +50,8 @@ class ServerGameState extends GameState {
 		}
 	}
 
-	addNode(position, player){
-		let node = player.buildNode(position);
+	addBaseNode(position, player){
+		let node = player.buildBaseNode(position);
 		if (node !== null)
 			this.spatialHash.insert(node);
 	}
@@ -148,7 +148,7 @@ class ServerGameState extends GameState {
 
 		this._detectCollisions(
 			this.bullets, 
-			'ServerNode', 
+			'ServerBaseNode', 
 			function(bullet, node) {
 				if (bullet.ownerID === node.ownerID){
 					return;

@@ -1,1794 +1,4 @@
 (function e(t,n,r){function s(o,u){if(!n[o]){if(!t[o]){var a=typeof require=="function"&&require;if(!u&&a)return a(o,!0);if(i)return i(o,!0);var f=new Error("Cannot find module '"+o+"'");throw f.code="MODULE_NOT_FOUND",f}var l=n[o]={exports:{}};t[o][0].call(l.exports,function(e){var n=t[o][1][e];return s(n?n:e)},l,l.exports,e,t,n,r)}return n[o].exports}var i=typeof require=="function"&&require;for(var o=0;o<r.length;o++)s(r[o]);return s})({1:[function(require,module,exports){
-'use strict';
-
-var ClientGameState = require('./ClientGameState');
-var InputUpdate = require('../shared/InputUpdate');
-var ClientPlayer = require('./ClientPlayer');
-var OtherPlayer = require('./OtherPlayer');
-var ClientBullet = require('./ClientBullet');
-var ClientCollectible = require('./ClientCollectible');
-var KeyboardState = require('../lib/THREEx.KeyboardState');
-var MouseState = require('../lib/MouseState');
-var Vector2D = require('../lib/Vector2D');
-var Globals = require('../lib/Globals');
-
-var prevTime = Date.now();
-var frameCount = 0;
-var frameRate = 0;
-
-var updateCount = 0;
-var updateAccumTime = 0;
-var timePerUpdate = 0;
-
-var drawCount = 0;
-var drawAccumTime = 0;
-var timePerDraw = 0;
-
-class Client {
-	constructor() {
-		this.gamestateReceived = false;		
-		this.socket = io();
-
-		this.socket.once('init', this.handleInitFromServer.bind(this));
-		this.socket.on('update', this.handleUpdateFromServer.bind(this));
-		
-		this.canvas = document.getElementById('canvas');
-		this.ctx = this.canvas.getContext('2d');
-		this.scaleCanvas();
-
-
-		if (this.gamestate === undefined) {
-			this.gamestate = null;
-		}
-		this.gameStateUpdates = [];
-		this.inputUpdates = [];
-		this.currentSequenceNumber = 0;
-		this.entityInterpolationOffset = 100;
-		
-		this.keyboard = new KeyboardState();
-		this.mouse = new MouseState();
-		this.prevIsRightButtonDown = false;
-		this.prevKeysPressed = {};
-		// for (let i=0; i<KEYBOARD_INPUTS.length; i++){
-		// 	this.prevKeysPressed[KEYBOARD_INPUTS[i]] = false;
-		// }
-
-		document.ondragstart = function(event) { return false };
-		
-		window.onresize = this.onWindowResize.bind(this);
-	}
-
-	scaleCanvas(){
-		this.canvas.width = window.innerWidth;
-		this.canvas.height = window.innerHeight;
-
-		let aspect = this.canvas.width / this.canvas.height;
-		if (aspect < Globals.DEFAULT_ASPECT){
-			this.scale = this.canvas.height / Globals.DEFAULT_HEIGHT;
-		}
-		else{
-			this.scale = this.canvas.width / Globals.DEFAULT_WIDTH;
-		}
-	}
-
-	run() {
-		this.prevTime = Date.now();
-		this.updateGameStateID = setInterval(this.updateGameState.bind(this), 15);
-		window.requestAnimationFrame(this.draw.bind(this));
-	}
-
-	handleInitFromServer(data) {
-		this.ID = data.clientID;
-		this.gameStateUpdates = [];
-		this.gameStateUpdates.push(data.gameStateUpdate);
-		this.currentSequenceNumber = data.gameStateUpdate.sequenceNumber;
-		this.gamestate = new ClientGameState(data.worldWidth, data.worldHeight, data.gameStateUpdate.player);
-		this.gamestateReceived = true;
-		this.run();
-	}
-
-	handleUpdateFromServer(gameStateUpdate) {
-		let currTime = Date.now();
-
-		this.gameStateUpdates.push(gameStateUpdate);
-		let discardIndex = this.getInterpolationIndex(currTime) - 1;
-		if (discardIndex >= 0) {
-			this.gameStateUpdates.splice(0, discardIndex + 1);
-		}
-
-		discardIndex = this.inputUpdates.findIndex(
-			function(inputUpdate) {
-				return inputUpdate.sequenceNumber === gameStateUpdate.sequenceNumber;
-			}
-		);
-
-		//if sequence number not found, then it must be associated with a discarded input.
-		//this means that a more recent server update has already been applied, so we can ignore the current server update.
-		if (discardIndex !== -1) { 
-			this.inputUpdates.splice(0, discardIndex + 1);
-			
-			//block MOVED from updateGameState() -- want to apply inputs to server update immediately, only once.
-			if (this.gameStateUpdates[this.gameStateUpdates.length-1].player === null){
-				this.gamestate=null;
-			}
-			else {
-				this.gamestate.setPlayerProperties(this.gameStateUpdates[this.gameStateUpdates.length-1].player);
-				for (let i = 0; i < this.inputUpdates.length; i++) {
-					this.gamestate.updatePlayer(
-						this.inputUpdates[i],
-						this.inputUpdates[i].deltaTime
-					);
-				}
-			}
-			
-		}
-	}
-	
-	updateGameState() {
-		let currTime = Date.now();
-		let deltaTime = (currTime - this.prevTime) / 1000;
-		this.prevTime = currTime;
-
-		let inputUpdate = this.getInput(deltaTime);
-		this.inputUpdates.push(inputUpdate);
-		this.socket.emit('update', inputUpdate);
-
-		//Client prediction.
-		if (this.gamestate !== null){
-			this.gamestate.updatePlayer(
-						inputUpdate,
-						inputUpdate.deltaTime
-			);
-		}
-		/*
-		else {
-			if (inputUpdate.isMouseLeftButtonDown || 'space' in inputUpdate.keysPressed) {
-				this.socket.emit('restart');
-			}
-		}
-		*/
-
-		updateAccumTime += Date.now() - currTime;
-		updateCount++;
-		if (updateCount >= 100) {
-			timePerUpdate = updateAccumTime / 100.0;
-			updateCount = 0;
-			updateAccumTime = 0;
-		}
-	}
-	
-	draw() {
-		let drawBeginTime = Date.now();
-
-		this.ctx.setTransform(1, 0, 0, 1, 0, 0);
-		this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
-		
-		if (this.gamestate === null) {
-			if (this.gamestateReceived) {
-				this.ctx.fillStyle = "red";
-				this.ctx.font = '100px Arial';
-				let msg = "YOU DEAD";
-				this.ctx.fillText(msg, this.canvas.width/2 - this.ctx.measureText(msg).width/2, this.canvas.height/2);
-				/*
-				this.ctx.font = '32px Arial';
-				msg = "Press 'Space' or 'Left Mouse Button' to restart.";
-				this.ctx.fillText(msg, this.canvas.width/2 - this.ctx.measureText(msg).width/2, this.canvas.height - 40);
-				*/
-			}
-			window.requestAnimationFrame(this.draw.bind(this));
-			return;
-		}
-
-		let entities = this.performEntityInterpolation();
-		this.gamestate.draw(this.ctx, this.scale, entities.otherPlayers, entities.bullets, entities.collectibles);
-		
-		this.ctx.setTransform(this.scale, 0, 0, this.scale, 0, 0);
-		this.ctx.fillStyle = "purple";
-		this.ctx.font = '15px Arial';
-		this.ctx.fillText("[1]  Pleb Pistol", 20, this.canvas.height/this.scale - 70);
-		this.ctx.fillText("[2]  Flame Thrower", 20, this.canvas.height/this.scale - 50);
-		this.ctx.fillText("[3]  Volcano", 20, this.canvas.height/this.scale - 30);
-
-		frameCount++;
-		let currTime = Date.now();
-		if (currTime - prevTime >= 1000) {
-			frameRate = frameCount;
-			frameCount = 0;
-			prevTime = currTime;
-		}
-
-		this.ctx.fillStyle = "black";
-		this.ctx.fillText("Frame rate: " + frameRate, 20, 30);
-		this.ctx.fillText("Update time: " + timePerUpdate + "ms", 20, 50);
-		this.ctx.fillText("Draw time: " + timePerDraw + "ms", 20, 70);
-
-		drawAccumTime += Date.now() - drawBeginTime;
-		drawCount++;
-		if (drawCount >= 100) {
-			timePerDraw = drawAccumTime / 100.0;
-			drawCount = 0;
-			drawAccumTime = 0;
-		}
-
-		window.requestAnimationFrame(this.draw.bind(this));
-	}
-
-	getInput(deltaTime){
-		let keys = { numDirKeysPressed: 0 };
-		let dirKeys = "WASD";
-		for (let i = 0; i < dirKeys.length; i++) {
-			let currKey = dirKeys[i];
-			if (this.keyboard.pressed(currKey)) {
-				keys[currKey] = true;
-				keys.numDirKeysPressed++;
-			}
-		}
-		let numKeys = "123";
-		for (let i = 0; i < numKeys.length; i++) {
-			let currKey = numKeys[i];
-			if (this.keyboard.pressed(currKey)) {
-				keys[currKey] = true;
-			}
-		}
-		if (this.keyboard.pressed('F')) {
-			keys['F'] = true;
-		}
-		if (this.keyboard.pressed('space')) {
-			keys['space'] = true;
-		}
-
-		let keysClicked = {};  //get keysClicked
-		for (let i in this.prevKeysPressed){
-			if (this.prevKeysPressed[i] === true &&
-				keys[i] !== true)
-				keysClicked[i] = true;
-		}
-
-		this.prevKeysPressed = Globals.clone(keys);
-
-		let mouseDirection = (this.gamestate !== null) ?
-			new Vector2D(this.mouse.x, this.mouse.y).sub(new Vector2D(this.gamestate.canvasPlayerPosition.x, this.gamestate.canvasPlayerPosition.y)).div(this.scale):
-			null;
-		let mousePosition = (this.gamestate !== null) ?
-			new Vector2D(this.gamestate.player.position.x, this.gamestate.player.position.y).add(mouseDirection) :
-			null;
-		
-		let isRightButtonClicked = false;
-		if (this.prevIsRightButtonDown && !this.mouse.isRightButtonDown) isRightButtonClicked = true;
-		this.prevIsRightButtonDown = this.mouse.isRightButtonDown;
-
-		let inputUpdate = new InputUpdate(
-							++this.currentSequenceNumber, 
-							keys, 
-							keysClicked,
-							mouseDirection,
-							mousePosition, 
-							this.mouse.isLeftButtonDown, 
-							isRightButtonClicked,
-							Date.now(), 
-							deltaTime
-						);
-		return inputUpdate;
-	}
-
-	// Linear interpolation
-	performEntityInterpolation() {
-		let currTime = Date.now();
-		let otherPlayers = [];
-		let bullets = [];
-		let collectibles = [];
-
-		let interpolationIndex = this.getInterpolationIndex(currTime);
-		let gameStateUpdate_1 = this.gameStateUpdates[interpolationIndex];
-
-		if (interpolationIndex === this.gameStateUpdates.length - 1) {
-			for (let id in gameStateUpdate_1.otherPlayers) {
-				if (id === this.ID) {
-					continue;
-				}
-				let otherPlayer = gameStateUpdate_1.otherPlayers[id];
-				if (this.isWithinCameraView(otherPlayer.position)) {
-					otherPlayers.push(
-						new OtherPlayer(
-							otherPlayer.position, 
-							otherPlayer.size, 
-							otherPlayer.orientation, 
-							otherPlayer.health, 
-							otherPlayer.weapon,
-							otherPlayer.base, 
-							otherPlayer.color, 
-							otherPlayer.outlineColor
-						)
-					);
-				}
-			}
-			for (let id in gameStateUpdate_1.bullets) {
-				let bullet = gameStateUpdate_1.bullets[id];
-				if (this.isWithinCameraView(bullet.position)) {
-					bullets.push(
-						new ClientBullet(
-							bullet.position, 
-							bullet.radius, 
-							bullet.health, 
-							bullet.color, 
-							bullet.outlineColor
-						)
-					);
-				}
-			}
-			for (let id in gameStateUpdate_1.collectibles) {
-				let collectible = gameStateUpdate_1.collectibles[id];
-				if (this.isWithinCameraView(collectible.position)) {
-					collectibles.push(
-						new ClientCollectible(
-							collectible.position, 
-							collectible.size, 
-							collectible.orientation, 
-							collectible.health, 
-							collectible.color, 
-							collectible.outlineColor
-						)
-					);
-				}
-			}
-		}
-		else {
-			let gameStateUpdate_2 = this.gameStateUpdates[interpolationIndex + 1];
-			let interpolationTime = currTime - this.entityInterpolationOffset;
-			let serverDiffTime = gameStateUpdate_2.serverTime - gameStateUpdate_1.serverTime;
-			let interpolationFactor = (interpolationTime - gameStateUpdate_1.serverTime) / serverDiffTime;
-			let antiInterpolationFactor = 1 - interpolationFactor;
-
-			for (let id in gameStateUpdate_2.otherPlayers) {
-				if (id === this.ID) {
-					continue;
-				}
-				let otherPlayer_2 = gameStateUpdate_2.otherPlayers[id];
-				if (this.isWithinCameraView(otherPlayer_2.position)) {
-					if (id in gameStateUpdate_1.otherPlayers) {
-						let otherPlayer_1 = gameStateUpdate_1.otherPlayers[id];
-						var interpX = antiInterpolationFactor * otherPlayer_1.position.x + interpolationFactor * otherPlayer_2.position.x;
-						var interpY = antiInterpolationFactor * otherPlayer_1.position.y + interpolationFactor * otherPlayer_2.position.y;
-						var interpOrientation = this.interpolateOrientation(otherPlayer_1.orientation, otherPlayer_2.orientation, interpolationFactor, antiInterpolationFactor);
-					}
-					else {
-						var interpX = otherPlayer_2.position.x;
-						var interpY = otherPlayer_2.position.y;
-						var interpOrientation = otherPlayer_2.orientation;
-					}
-
-					otherPlayers.push(
-						new OtherPlayer(
-							{
-								x: interpX,
-								y: interpY
-							}, 
-							otherPlayer_2.size, 
-							interpOrientation, 
-							otherPlayer_2.health, 
-							otherPlayer_2.weapon, 
-							otherPlayer_2.base,
-							otherPlayer_2.color, 
-							otherPlayer_2.outlineColor
-						)
-					);
-				}
-			}
-
-			for (let id in gameStateUpdate_2.bullets) {
-				let bullet_2 = gameStateUpdate_2.bullets[id];
-				if (this.isWithinCameraView(bullet_2.position)) {
-					if (id in gameStateUpdate_1.bullets) {
-						let bullet_1 = gameStateUpdate_1.bullets[id];
-						var interpX = antiInterpolationFactor * bullet_1.position.x + interpolationFactor * bullet_2.position.x;
-						var interpY = antiInterpolationFactor * bullet_1.position.y + interpolationFactor * bullet_2.position.y;
-					}
-					else {
-						var interpX = bullet_2.position.x;
-						var interpY = bullet_2.position.y;
-					}
-
-					bullets.push(
-						new ClientBullet(
-							{
-								x: interpX,
-								y: interpY
-							}, 
-							bullet_2.radius, 
-							bullet_2.health, 
-							bullet_2.color, 
-							bullet_2.outlineColor
-						)
-					);
-				}
-			}
-			for (let id in gameStateUpdate_2.collectibles) {
-				let collectible_2 = gameStateUpdate_2.collectibles[id];
-				if (this.isWithinCameraView(collectible_2.position)) {
-					if (id in gameStateUpdate_1.collectibles) {
-						let collectible_1 = gameStateUpdate_1.collectibles[id];
-						var interpX = antiInterpolationFactor * collectible_1.position.x + interpolationFactor * collectible_2.position.x;
-						var interpY = antiInterpolationFactor * collectible_1.position.y + interpolationFactor * collectible_2.position.y;
-						var interpOrientation = this.interpolateOrientation(collectible_1.orientation, collectible_2.orientation, interpolationFactor, antiInterpolationFactor);
-					}
-					else {
-						var interpX = collectible_2.position.x;
-						var interpY = collectible_2.position.y;
-						var interpOrientation = collectible_2.orientation;
-					}
-
-					collectibles.push(
-						new ClientCollectible(
-							{
-								x: interpX,
-								y: interpY
-							}, 
-							collectible_2.size, 
-							interpOrientation, 
-							collectible_2.health, 
-							collectible_2.color, 
-							collectible_2.outlineColor
-						)
-					);
-				}
-			}
-		}
-
-		return {
-			otherPlayers: otherPlayers,
-			bullets: bullets,
-			collectibles: collectibles
-		}
-	}
-
-	interpolateOrientation(orientation_1, orientation_2, interpolationFactor, antiInterpolationFactor) {
-		if (orientation_1 < Globals.DEGREES_90 && orientation_2 > Globals.DEGREES_270) {
-			orientation_1 += Globals.DEGREES_360;
-		}
-		else if (orientation_2 < Globals.DEGREES_90 && orientation_1 > Globals.DEGREES_270) {
-			orientation_2 += Globals.DEGREES_360;
-		}
-
-		let interpOrientation = antiInterpolationFactor * orientation_1 + interpolationFactor * orientation_2;
-		if (interpOrientation > Globals.DEGREES_360) {
-			interpOrientation -= Globals.DEGREES_360;
-		}
-		return interpOrientation;
-	}
-
-	getInterpolationIndex(currTime) {
-		let interpolationIndex = this.gameStateUpdates.findIndex(
-			function(gameStateUpdate) {
-				return (currTime - gameStateUpdate.serverTime) < this.entityInterpolationOffset;
-			}.bind(this)
-		);
-		if (interpolationIndex === -1) {
-			interpolationIndex = this.gameStateUpdates.length - 1;
-		}
-		else if (interpolationIndex > 0) {
-			interpolationIndex--;
-		}
-
-		return interpolationIndex;
-	}
-
-	isWithinCameraView(position) {
-		let playerPos = this.gamestate.player.position;
-		let viewWidth = this.canvas.width/2 + 100;
-		let viewHeight = this.canvas.height/2 + 100;
-		return 	position.x > playerPos.x - viewWidth && position.x < playerPos.x + viewWidth &&
-				position.y > playerPos.y - viewHeight && position.y < playerPos.y + viewHeight;
-	}
-	
-	onWindowResize(event) {
-		this.scaleCanvas();
-	}
-}
-
-module.exports = Client;
-
-},{"../lib/Globals":11,"../lib/MouseState":12,"../lib/THREEx.KeyboardState":13,"../lib/Vector2D":14,"../shared/InputUpdate":20,"./ClientBullet":2,"./ClientCollectible":3,"./ClientGameState":4,"./ClientPlayer":6,"./OtherPlayer":9}],2:[function(require,module,exports){
-'use strict';
-
-var Bullet = require('../shared/Bullet');
-var Vector2D = require('../lib/Vector2D');
-var Globals = require('../lib/Globals');
-
-class ClientBullet extends Bullet {
-	constructor(position, radius = 7, health = 1, color = "black", outlineColor = 'rgba(80,80,80,1)') {
-		super(new Vector2D(position.x, position.y), radius, health, color, outlineColor);
-	}
-	
-	draw(ctx, transformToCameraCoords) {
-		transformToCameraCoords();
-		ctx.beginPath();
-		ctx.arc(this.position.x, this.position.y, this.radius, 0, Globals.DEGREES_360); // unrounded
-		//ctx.arc(~~(0.5 + this.position.x), ~~(0.5 + this.position.y), this.radius, 0, Globals.DEGREES_360); //rounded
-		ctx.fillStyle = this.color;
-		ctx.fill();
-		ctx.strokeStyle = this.outlineColor;
-		ctx.lineWidth = 2;
-		ctx.stroke();
-	}
-}
-
-module.exports = ClientBullet;
-
-},{"../lib/Globals":11,"../lib/Vector2D":14,"../shared/Bullet":16}],3:[function(require,module,exports){
-'use strict';
-
-var Collectible = require('../shared/Collectible');
-var HealthBar = require('./HealthBar');
-var Vector2D = require('../lib/Vector2D');
-
-class ClientCollectible extends Collectible {
-	constructor(position, size, orientation, health, color, outlineColor) {
-		super(new Vector2D(position.x, position.y), health);
-		this.size = size;
-		this.orientation = orientation;
-		this.color = color;
-		this.outlineColor = outlineColor;
-		this.healthBar = new HealthBar(new Vector2D(0, this.size + 10), this.size * 1.5);
-	}
-	
-	draw(ctx, transformToCameraCoords) {
-		transformToCameraCoords();
-		ctx.transform(1, 0, 0, 1, this.position.x, this.position.y); //unrounded
-		//ctx.transform(1, 0, 0, 1, ~~(0.5 + this.position.x), ~~(0.5 + this.position.y)); //rounded
-		ctx.rotate(this.orientation);
-		ctx.transform(1, 0, 0, 1, -this.size/2, -this.size/2);
-		ctx.fillStyle = this.color;
-		ctx.fillRect(0, 0, this.size, this.size);
-		
-		ctx.strokeStyle = this.outlineColor;
-		ctx.lineWidth = 3;
-		ctx.strokeRect(0, 0, this.size, this.size);
-
-		this.healthBar.update(this.health);
-		if (this.health < 100.0) {
-			transformToCameraCoords();
-			ctx.transform(1, 0, 0, 1, this.position.x, this.position.y); //unrounded
-			//ctx.transform(1, 0, 0, 1, ~~(0.5 + this.position.x), ~~(0.5 + this.position.y)); //rounded
-			this.healthBar.draw(ctx);
-		}
-	}
-}
-
-module.exports = ClientCollectible;
-
-},{"../lib/Vector2D":14,"../shared/Collectible":17,"./HealthBar":8}],4:[function(require,module,exports){
-'use strict';
-
-var GameState = require('../shared/GameState');
-var ClientPlayer = require('./ClientPlayer');
-var Vector2D = require('../lib/Vector2D');
-var Globals = require('../lib/Globals');
-
-class ClientGameState extends GameState {
-    constructor(worldWidth, worldHeight, playerUpdateProperties) {
-        super(worldWidth, worldHeight);
-
-		this.player = new ClientPlayer(playerUpdateProperties);
-		this.canvas = document.getElementById('canvas');
-		this.canvasPlayerPosition = new Vector2D(this.canvas.width/2, this.canvas.height/2);
-		document.getElementById("grid").draggable = false;
-		this.grid = document.getElementById("grid");
-    }
-	
-	draw(ctx, scale, otherPlayers, bullets, collectibles) {
-		let lengthFromCenter = scale*50*Math.pow((this.player.velocity.getLength()/this.player.maxSpeed), 2);
-		let displacementFromCenter = new Vector2D().copy(this.player.velocity).setLength(lengthFromCenter); //displacement is a vector in the same direction as velocity, but length = length(velocity)^2 *50
-
-		this.canvasPlayerPosition.x = this.canvas.width/2 + displacementFromCenter.x; //secret sauce for camera movement
-		this.canvasPlayerPosition.y = this.canvas.height/2 + displacementFromCenter.y; //secret sauce for camera movement
-
-		let playerPosition = this.player.position;
-		let canvas = this.canvas;
-		let canvasPlayerPosition = this.canvasPlayerPosition;
-		let transformToCameraCoords = function() {
-			ctx.setTransform(scale, 0, 0, scale, 
-				canvasPlayerPosition.x - playerPosition.x*scale, //unrounded
-				canvasPlayerPosition.y - playerPosition.y*scale //unrounded
-			);
-		};
-
-		this.drawBackground(ctx, transformToCameraCoords);
-		otherPlayers.map(function(otherPlayer) { otherPlayer.draw(ctx, transformToCameraCoords); });
-		this.player.draw(
-			ctx,
-			function() {
-				ctx.setTransform(scale, 0, 0, scale, canvasPlayerPosition.x, canvasPlayerPosition.y);
-			},
-			transformToCameraCoords
-		);
-		bullets.map(function(bullet) { bullet.draw(ctx, transformToCameraCoords); });
-		collectibles.map(function(collectible) { collectible.draw(ctx, transformToCameraCoords); });
-	}
-
-	setPlayerProperties(playerUpdateProperties) {
-		this.player.setUpdateProperties(playerUpdateProperties);
-	}
-	
-	updatePlayer(input, deltaTime) {
-		this.player.update(
-			deltaTime, 
-			input.keysPressed, 
-			input.mouseDirection
-		);
-	}
-
-	drawBackground(ctx, transformToCameraCoords) {
-		transformToCameraCoords();
-		ctx.rect(0, 0, this.worldWidth, this.worldHeight);
-		ctx.fillStyle = ctx.createPattern(this.grid, "repeat");
-		ctx.fill();
-	}
-}
-
-module.exports = ClientGameState;
-
-},{"../lib/Globals":11,"../lib/Vector2D":14,"../shared/GameState":19,"./ClientPlayer":6}],5:[function(require,module,exports){
-'use strict';
-
-var Node = require('../shared/Node');
-var Vector2D = require('../lib/Vector2D');
-var Globals = require('../lib/Globals');
-var HealthBar = require('./HealthBar');
-
-
-class ClientNode extends Node{
-	constructor(position, parent, children, radius, health, color, outlineColor, id) {
-		super(new Vector2D(position.x, position.y), parent, children, radius, health, color, outlineColor, id);
-		var _children = [];
-		for (let i in this.children){
-			_children.push(new ClientNode(this.children[i].position, //recursively generate all child Nodes
-										this, 
-										this.children[i].children,
-										this.children[i].radius, 
-										this.children[i].health, 
-										this.children[i].color, 
-										this.children[i].outlineColor,
-										this.children[i].id));
-		}
-		this.children = _children;
-		this.healthBar = new HealthBar(new Vector2D(0, this.radius + 12), this.radius * 2.5);
-	}
-
-	//update the base based on the nodeUpdate 
-	setUpdateProperties(nodeUpdate){
-		//console.log(nodeUpdate);
-		for (let i in nodeUpdate){ 
-			if (i!=='children' && i!=='id'){
-				//console.log(i);
-				this[i] = nodeUpdate[i]; //assign all properties from the update
-			}
-		}
-		let j = 0;
-		while (j < this.children.length){ 
-			//console.log("i "+ j);
-			//console.log("children "+this.children.length);
-			if (nodeUpdate.children[this.children[j].id] === undefined){ //deleted nodes
-				this.children.splice(j,1);
-				//console.log(this.children[j].id+ " is undefined!");
-			}
-			else{ //updated nodes
-				this.children[j].setUpdateProperties(nodeUpdate.children[this.children[j].id]);
-				nodeUpdate.children[this.children[j].id]._checked = true;
-				//console.log(this.children[j].id+ " is checked!");
-				//console.log(nodeUpdate.children[this.children[j].id]);
-				j++;
-			}
-		}
-		//new nodes
-		for (let k in nodeUpdate.children){
-			//console.log(k);
-			if (nodeUpdate.children[k]._checked === undefined){
-				//console.log(k + " is not checked!");
-				//console.log(k);
-				this.children.push(new ClientNode(nodeUpdate.children[k].position, 
-												this,
-												nodeUpdate.children[k].children,
-												nodeUpdate.children[k].radius,
-												nodeUpdate.children[k].health,
-												nodeUpdate.children[k].color,
-												nodeUpdate.children[k].outlineColor, 
-												nodeUpdate.children[k].id));
-			}
-			else delete nodeUpdate.children[k]._checked;
-		}
-		//console.log("finished updating " + this.id);
-
-	}
-
-
-	draw(ctx, transformToCameraCoords) {  //iterative draw 
-		transformToCameraCoords();
-		var drawQueue = [this];
-		console.log(this.health);
-		while (drawQueue.length != 0){
-			transformToCameraCoords();
-			let item = drawQueue.shift();
-			ctx.strokeStyle = 'rgba(80,80,80,1)';
-			ctx.lineWidth = 3;
-			ctx.beginPath();
-			for (let i in item.children){
-        		ctx.moveTo(item.position.x, item.position.y);
-				ctx.lineTo(item.children[i].position.x, item.children[i].position.y);
-				drawQueue.push(item.children[i]);
-			}
-			ctx.stroke();
-			ctx.beginPath();
-			ctx.arc(item.position.x, item.position.y, item.radius, 0, Globals.DEGREES_360); // unrounded
-			//ctx.arc(~~(0.5 + this.position.x), ~~(0.5 + this.position.y), this.radius, 0, Globals.DEGREES_360); //rounded
-			ctx.fillStyle = item.color;
-			ctx.fill();
-			ctx.strokeStyle = item.outlineColor;
-			ctx.lineWidth = 3;
-			ctx.stroke();
-
-			item.healthBar.update(item.health);
-			if (item.health < 100) {
-				ctx.transform(1, 0, 0, 1, item.position.x, item.position.y); //unrounded
-				//ctx.transform(1, 0, 0, 1, ~~(0.5 + this.position.x), ~~(0.5 + this.position.y)); //rounded
-				item.healthBar.draw(ctx);
-			}
-		}
-	}
-
-	// draw(ctx, transformToCameraCoords) {   //recursive draw
-	// 	for (var i = 0; i < this.children.length; i++){
-	// 		transformToCameraCoords();
-	// 		ctx.beginPath();
- //        	ctx.moveTo(this.position.x, this.position.y);
-	// 		ctx.lineTo(this.children[i].position.x, this.children[i].position.y);
-	// 		ctx.strokeStyle = 'rgba(80,80,80,1)';
-	// 		ctx.lineWidth = 3;
-	// 		ctx.stroke();
-	// 		this.children[i].draw(ctx, transformToCameraCoords);
-	// 	}
-	// 	transformToCameraCoords();
-	// 	ctx.beginPath();
-	// 	ctx.arc(this.position.x, this.position.y, this.radius, 0, Globals.DEGREES_360); // unrounded
-	// 	//ctx.arc(~~(0.5 + this.position.x), ~~(0.5 + this.position.y), this.radius, 0, Globals.DEGREES_360); //rounded
-	// 	ctx.fillStyle = this.color;
-	// 	ctx.fill();
-	// 	ctx.strokeStyle = this.outlineColor;
-	// 	ctx.lineWidth = 3;
-	// 	ctx.stroke();
-
-	// 	this.healthBar.update(this.health);
-	// 	if (this.health < 100.0) {
-	// 		transformToCameraCoords();
-	// 		ctx.transform(1, 0, 0, 1, this.position.x, this.position.y); //unrounded
-	// 		//ctx.transform(1, 0, 0, 1, ~~(0.5 + this.position.x), ~~(0.5 + this.position.y)); //rounded
-	// 		this.healthBar.draw(ctx);
-	// 	}
-	// }
-
-}
-
-
-module.exports = ClientNode;
-},{"../lib/Globals":11,"../lib/Vector2D":14,"../shared/Node":21,"./HealthBar":8}],6:[function(require,module,exports){
-'use strict';
-
-var Player = require('../shared/Player');
-var ClientWeapon = require('./ClientWeapon');
-var ClientNode = require('./ClientNode');
-var HealthBar = require('./HealthBar');
-var Vector2D = require('../lib/Vector2D');
-var Globals = require('../lib/Globals');
-
-const DIAG_ACCEL_FACTOR = Math.cos(Math.PI/4);
-
-class ClientPlayer extends Player {
-	constructor(playerUpdateProperties) {
-		super(playerUpdateProperties.velocity, playerUpdateProperties.position, playerUpdateProperties.color);
-
-		this.setUpdateProperties(playerUpdateProperties);
-		this.healthBar = new HealthBar(new Vector2D(0, this.radius + 12), this.radius * 2.5);
-	}
-
-	setUpdateProperties(playerUpdateProperties) {
-		this.velocity = new Vector2D(playerUpdateProperties.velocity.x, playerUpdateProperties.velocity.y);
-		this.position = new Vector2D(playerUpdateProperties.position.x, playerUpdateProperties.position.y);
-		this.size = playerUpdateProperties.size;
-		this.acceleration = playerUpdateProperties.acceleration;
-		this.deceleration = playerUpdateProperties.deceleration;
-		this.maxSpeed = playerUpdateProperties.maxSpeed;
-		this.minSpeed = playerUpdateProperties.minSpeed;
-		this.radius = this.size/2;
-		this.orientation = playerUpdateProperties.orientation;
-		this.health = playerUpdateProperties.health;
-		let weapon = playerUpdateProperties.weapon;
-		this.weapon = new ClientWeapon(weapon.name, weapon.distanceFromPlayer, weapon.size, weapon.color, weapon.outlineColor);
-		let base = playerUpdateProperties.base;
-		if (base !== null){
-			if (this.base === null){
-				this.base = new ClientNode(base.position, null, base.children, base.radius, base.health, base.color, base.outlineColor, base.id);
-			}
-			else{
-				this.base.setUpdateProperties(base);
-			}
-		}
-		else{
-			this.base = null;
-		}
-		this.color = playerUpdateProperties.color;
-		this.outlineColor = playerUpdateProperties.outlineColor;
-	}
-	
-	draw(ctx, transformToCameraCoords, transformToCameraCoords2) {
-		if (this.base !== null)
-			this.base.draw(ctx, transformToCameraCoords2);
-
-		transformToCameraCoords();
-		ctx.beginPath();
-		ctx.arc(0, 0, this.radius, 0, 2*Math.PI);
-		ctx.fillStyle = this.color;
-		ctx.fill();
-
-		transformToCameraCoords();
-		ctx.rotate(this.orientation);
-		this.weapon.draw(ctx);
-
-		transformToCameraCoords();
-		this.healthBar.update(this.health);
-		this.healthBar.draw(ctx);
-		
-		transformToCameraCoords();
-		ctx.beginPath();
-		ctx.arc(0, 0, this.radius, 0, 2*Math.PI);
-		ctx.strokeStyle = this.outlineColor;
-		ctx.lineWidth = 3;
-		ctx.stroke();
-	}
-}
-
-module.exports = ClientPlayer;
-
-},{"../lib/Globals":11,"../lib/Vector2D":14,"../shared/Player":22,"./ClientNode":5,"./ClientWeapon":7,"./HealthBar":8}],7:[function(require,module,exports){
-'use strict';
-
-var Weapon = require('../shared/Weapon');
-
-class ClientWeapon extends Weapon {
-	constructor(name, distanceFromPlayer, size, color, outlineColor) {
-		super(name, distanceFromPlayer, size, color, outlineColor);
-	}
-	
-	draw(ctx) {
-		ctx.transform(1, 0, 0, 1, this.position.x, this.position.y); //unrounded
-		//ctx.transform(1, 0, 0, 1, ~~(0.5 + this.position.x), ~~(0.5 + this.position.y)); //rounded
-		ctx.fillStyle = this.color;
-		ctx.fillRect(0, 0, this.size, this.size);
-		
-		ctx.strokeStyle = this.outlineColor;
-		ctx.lineWidth = 3;
-		ctx.strokeRect(0, 0, this.size, this.size);
-	}
-}
-
-/*
-// dark grey: 'rgba(80,80,80,1)'
-var ClientWeaponFactory = {
-						//name				dist		  		size	color					damage	health	speed	rate	spread	rad	exp		bullet color			bullet outline color
-	makePlebPistol: function(distanceFromPlayer) {
-		return new ClientWeapon("Pleb Pistol", distanceFromPlayer, 19, 'rgba(255,0,128,1)');
-	},
-	makeFlameThrower: function(distanceFromPlayer) {
-		return new ClientWeapon("Flame Thrower", distanceFromPlayer, 20, 'rgba(255,140,0,1)');
-	},
-	makeVolcano: function(distanceFromPlayer) {
-		return new ClientWeapon("Volcano", distanceFromPlayer, 21, 'rgba(255,0,0,1)');
-	}
-};
-*/
-
-module.exports = ClientWeapon;
-
-},{"../shared/Weapon":23}],8:[function(require,module,exports){
-'use strict';
-
-var GameObject = require('../shared/GameObject');
-
-class HealthBar extends GameObject {
-	constructor(position, size) {
-		super(position, size, 'rgba(0,215,100,1)');
-
-        this.outlineColor = 'rgba(80,80,80,1)';
-        this.halfLength = this.size/2;
-        this.width = 6;
-        this.percent = 100;
-    }
-
-    update(health) {
-        this.percent = health;
-    }
-
-    draw(ctx) {
-        ctx.transform(1, 0, 0, 1, this.position.x - this.halfLength, this.position.y); //unrounded
-		//ctx.transform(1, 0, 0, 1, ~~(0.5 + this.position.x - this.halfLength), ~~(0.5 + this.position.y)); //rounded
-		ctx.fillStyle = this.outlineColor;
-        ctx.fillRect(0, 0, this.size, this.width);
-        ctx.fillStyle = this.color;
-        ctx.fillRect(0, 0, (this.size * this.percent) / 100, this.width); //unrounded
-		//ctx.fillRect(0, 0, ~~(0.5 + (this.size * this.percent) / 100), this.width); //rounded
-		ctx.strokeStyle = this.outlineColor;
-		ctx.lineWidth = 2;
-		ctx.strokeRect(0, 0, this.size, this.width);
-    }
-}
-
-module.exports = HealthBar;
-
-},{"../shared/GameObject":18}],9:[function(require,module,exports){
-'use strict';
-
-var GameObject = require('../shared/GameObject');
-var ClientWeapon = require('./ClientWeapon');
-var ClientNode = require('./ClientNode');
-var HealthBar = require('./HealthBar');
-var Vector2D = require('../lib/Vector2D');
-
-class OtherPlayer extends GameObject {
-    constructor(position, size, orientation, health, weapon, base, color, outlineColor) {
-        super(position, size, color);
-
-        this.radius = this.size/2;
-        this.orientation = orientation;
-        this.health = health;
-        this.weapon = new ClientWeapon(weapon.name, weapon.distanceFromPlayer, weapon.size, weapon.color, weapon.outlineColor);
-        this.outlineColor = outlineColor;
-        if (base !== null)
-			this.base = new ClientNode(base.position, null, base.children, base.radius, base.health, base.color, base.outlineColor, base.id);
-		else this.base = null;
-		this.healthBar = new HealthBar(new Vector2D(0, this.radius + 12), this.radius * 2.5);
-    }
-
-	draw(ctx, transformToCameraCoords) {
-		if (this.base !== null)
-			this.base.draw(ctx, transformToCameraCoords);
-
-		transformToCameraCoords();
-		ctx.beginPath();
-		ctx.arc(this.position.x, this.position.y, this.radius, 0, 2*Math.PI);
-		ctx.fillStyle = this.color;
-		ctx.fill();
-
-		transformToCameraCoords();
-        ctx.transform(1, 0, 0, 1, this.position.x, this.position.y);
-		ctx.rotate(this.orientation);
-		this.weapon.draw(ctx);
-
-		transformToCameraCoords();
-		this.healthBar.update(this.health);
-        ctx.transform(1, 0, 0, 1, this.position.x, this.position.y);
-		this.healthBar.draw(ctx);
-		
-		transformToCameraCoords();
-		ctx.beginPath();
-		ctx.arc(this.position.x, this.position.y, this.radius, 0, 2*Math.PI);
-		ctx.strokeStyle = this.outlineColor;
-		ctx.lineWidth = 3;
-		ctx.stroke();
-	}
-}
-
-module.exports = OtherPlayer;
-
-},{"../lib/Vector2D":14,"../shared/GameObject":18,"./ClientNode":5,"./ClientWeapon":7,"./HealthBar":8}],10:[function(require,module,exports){
-'use strict';
-
-var Client = require('./Client');
-new Client();
-
-},{"./Client":1}],11:[function(require,module,exports){
-module.exports = {
-    DEGREES_90: Math.PI/2,
-    DEGREES_180: Math.PI,
-    DEGREES_270: 3*Math.PI/2,
-    DEGREES_360: 2*Math.PI,
-    WORLD_WIDTH: 4000,
-    WORLD_HEIGHT: 4000,
-    DEFAULT_HEIGHT: 576,
-    DEFAULT_WIDTH: 1024,
-    DEFAULT_ASPECT: 16/9,
-    DEFAULT_SCALE: 1,
-
-
-    areObjectsSame: function(o1, o2) {
-        return JSON.stringify(o1) === JSON.stringify(o2);
-    },
-
-    clone: function(obj) {
-	    if (null == obj || "object" != typeof obj) return obj;
-	    var copy = obj.constructor();
-	    for (var attr in obj) {
-	        if (obj.hasOwnProperty(attr)) copy[attr] = this.clone(obj[attr]);
-	    }
-	    return copy;
-	}
-};
-
-},{}],12:[function(require,module,exports){
-/**
- * Author: Kiran Sivakumar
-*/
-
-'use strict';
-
-class MouseState {	
-	constructor() {
-		this.x = 0;
-		this.y = 0;
-		this.isLeftButtonDown = false;
-		this.isScrollButtonDown = false;
-		this.isRightButtonDown = false;
-		document.onmousemove = this.onMouseMove.bind(this);
-		document.onmousedown = this.onMouseDown.bind(this);
-		document.onmouseup = this.onMouseUp.bind(this);
-	}
-	
-	onMouseMove(event) {
-		event = event || window.event;
-		this.x = event.clientX;
-		this.y = event.clientY;
-	}
-	
-	onMouseDown(event) {
-		event = event || window.event;
-		
-		if (event.button === MouseState.buttonCodes.left) {
-			this.isLeftButtonDown = true;
-		}
-		else if (event.button === MouseState.buttonCodes.scroll) {
-			this.isScrollButtonDown = true;
-		}
-		else if (event.button === MouseState.buttonCodes.right) {
-			this.isRightButtonDown = true;
-		}
-	}
-	
-	onMouseUp(event) {
-		event = event || window.event;
-		
-		if (event.button === MouseState.buttonCodes.left) {
-			this.isLeftButtonDown = false;
-		}
-		else if (event.button === MouseState.buttonCodes.scroll) {
-			this.isScrollButtonDown = false;
-		}
-		else if (event.button === MouseState.buttonCodes.right) {
-			this.isRightButtonDown = false;
-		}
-	}
-}
-
-MouseState.buttonCodes = {
-	left : 0,
-	scroll : 1,
-	right : 2
-};
-
-module.exports = MouseState;
-
-},{}],13:[function(require,module,exports){
-/** @namespace */
-var THREEx	= THREEx 		|| {};
-
-/**
- * - NOTE: it would be quite easy to push event-driven too
- *   - microevent.js for events handling
- *   - in this._onkeyChange, generate a string from the DOM event
- *   - use this as event name
-*/
-
-THREEx.KeyboardState	= function()
-{
-	this.keyCodes	= {};
-	this.modifiers	= {};
-	
-	var self	= this;
-	this._onKeyDown	= function(event){ self._onKeyChange(event, true); };
-	this._onKeyUp	= function(event){ self._onKeyChange(event, false);};
-	
-	document.addEventListener("keydown", this._onKeyDown, false);
-	document.addEventListener("keyup", this._onKeyUp, false);
-}
-
-/**
- * To stop listening of the keyboard events
-*/
-THREEx.KeyboardState.prototype.destroy	= function()
-{	
-	document.removeEventListener("keydown", this._onKeyDown, false);
-	document.removeEventListener("keyup", this._onKeyUp, false);
-}
-
-THREEx.KeyboardState.MODIFIERS	= ['shift', 'ctrl', 'alt', 'meta'];
-
-THREEx.KeyboardState.ALIAS	= {
-	'left'		: 37,
-	'up'		: 38,
-	'right'		: 39,
-	'down'		: 40,
-	'space'		: 32,
-	'pageup'	: 33,
-	'pagedown'	: 34,
-	'tab'		: 9
-};
-
-/**
- * to process the keyboard dom event
-*/
-THREEx.KeyboardState.prototype._onKeyChange	= function(event, pressed)
-{
-	var keyCode		= event.keyCode;
-	this.keyCodes[keyCode]	= pressed;
-	
-	this.modifiers['shift']= event.shiftKey;
-	this.modifiers['ctrl']	= event.ctrlKey;
-	this.modifiers['alt']	= event.altKey;
-	this.modifiers['meta']	= event.metaKey;
-}
-
-/**
- * query keyboard state to know if a key is pressed of not
- *
- * @param {String} keyDesc the description of the key. format : modifiers+key e.g shift+A
- * @returns {Boolean} true if the key is pressed, false otherwise
-*/
-THREEx.KeyboardState.prototype.pressed	= function(keyDesc)
-{
-	var keys	= keyDesc.split("+");
-	for(var i = 0; i < keys.length; i++){
-		var key		= keys[i];
-		var pressed;
-		if( THREEx.KeyboardState.MODIFIERS.indexOf( key ) !== -1 ){
-			pressed	= this.modifiers[key];
-		}else if( Object.keys(THREEx.KeyboardState.ALIAS).indexOf( key ) != -1 ){
-			pressed	= this.keyCodes[ THREEx.KeyboardState.ALIAS[key] ];
-		}else {
-			pressed	= this.keyCodes[key.toUpperCase().charCodeAt(0)]
-		}
-		if( !pressed)	return false;
-	};
-	return true;
-}
-
-module.exports = THREEx.KeyboardState;
-
-},{}],14:[function(require,module,exports){
-/**
- * Author: Kiran Sivakumar
-*/
-
-'use strict';
-
-class Vector2D {	
-	constructor(x = 0, y = 0) {
-		this.x = x;
-		this.y = y;
-	}
-	
-	copy(other) {
-		this.x = other.x;
-		this.y = other.y;
-		return this;
-	}
-	
-	getLength() {
-		return Math.sqrt(Math.pow(this.x, 2) + Math.pow(this.y, 2));
-	}
-	
-	setLength(len) {
-		this.setToUnit();
-		this.mul(len);
-		return this;
-	}
-	
-	setToUnit() {
-		var len = this.getLength();
-		if (len === 0) {
-			return this;
-		}
-		
-		this.mul(1/len);
-		return this;
-	}
-	
-	set(x, y) {
-		this.x = x;
-		this.y = y;
-		return this;
-	}
-	
-	add(other) {
-		this.x += other.x;
-		this.y += other.y;
-		return this;
-	}
-	
-	sub(other) {
-		this.x -= other.x;
-		this.y -= other.y;
-		return this;
-	}
-	
-	mul(scalar) {
-		this.x *= scalar;
-		this.y *= scalar;
-		return this;
-	}
-
-	div(scalar) {
-		this.x /= scalar;
-		this.y /= scalar;
-		return this;
-	}
-	
-	neg() {
-		this.x *= -1;
-		this.y *= -1;
-		return this;
-	}
-}
-
-module.exports = Vector2D;
-
-},{}],15:[function(require,module,exports){
-(function (Buffer){
-//     uuid.js
-//
-//     Copyright (c) 2010-2012 Robert Kieffer
-//     MIT License - http://opensource.org/licenses/mit-license.php
-
-/*global window, require, define */
-(function(_window) {
-  'use strict';
-
-  // Unique ID creation requires a high quality random # generator.  We feature
-  // detect to determine the best RNG source, normalizing to a function that
-  // returns 128-bits of randomness, since that's what's usually required
-  var _rng, _mathRNG, _nodeRNG, _whatwgRNG, _previousRoot;
-
-  function setupBrowser() {
-    // Allow for MSIE11 msCrypto
-    var _crypto = _window.crypto || _window.msCrypto;
-
-    if (!_rng && _crypto && _crypto.getRandomValues) {
-      // WHATWG crypto-based RNG - http://wiki.whatwg.org/wiki/Crypto
-      //
-      // Moderately fast, high quality
-      try {
-        var _rnds8 = new Uint8Array(16);
-        _whatwgRNG = _rng = function whatwgRNG() {
-          _crypto.getRandomValues(_rnds8);
-          return _rnds8;
-        };
-        _rng();
-      } catch(e) {}
-    }
-
-    if (!_rng) {
-      // Math.random()-based (RNG)
-      //
-      // If all else fails, use Math.random().  It's fast, but is of unspecified
-      // quality.
-      var  _rnds = new Array(16);
-      _mathRNG = _rng = function() {
-        for (var i = 0, r; i < 16; i++) {
-          if ((i & 0x03) === 0) { r = Math.random() * 0x100000000; }
-          _rnds[i] = r >>> ((i & 0x03) << 3) & 0xff;
-        }
-
-        return _rnds;
-      };
-      if ('undefined' !== typeof console && console.warn) {
-        console.warn("[SECURITY] node-uuid: crypto not usable, falling back to insecure Math.random()");
-      }
-    }
-  }
-
-  function setupNode() {
-    // Node.js crypto-based RNG - http://nodejs.org/docs/v0.6.2/api/crypto.html
-    //
-    // Moderately fast, high quality
-    if ('function' === typeof require) {
-      try {
-        var _rb = require('crypto').randomBytes;
-        _nodeRNG = _rng = _rb && function() {return _rb(16);};
-        _rng();
-      } catch(e) {}
-    }
-  }
-
-  if (_window) {
-    setupBrowser();
-  } else {
-    setupNode();
-  }
-
-  // Buffer class to use
-  var BufferClass = ('function' === typeof Buffer) ? Buffer : Array;
-
-  // Maps for number <-> hex string conversion
-  var _byteToHex = [];
-  var _hexToByte = {};
-  for (var i = 0; i < 256; i++) {
-    _byteToHex[i] = (i + 0x100).toString(16).substr(1);
-    _hexToByte[_byteToHex[i]] = i;
-  }
-
-  // **`parse()` - Parse a UUID into it's component bytes**
-  function parse(s, buf, offset) {
-    var i = (buf && offset) || 0, ii = 0;
-
-    buf = buf || [];
-    s.toLowerCase().replace(/[0-9a-f]{2}/g, function(oct) {
-      if (ii < 16) { // Don't overflow!
-        buf[i + ii++] = _hexToByte[oct];
-      }
-    });
-
-    // Zero out remaining bytes if string was short
-    while (ii < 16) {
-      buf[i + ii++] = 0;
-    }
-
-    return buf;
-  }
-
-  // **`unparse()` - Convert UUID byte array (ala parse()) into a string**
-  function unparse(buf, offset) {
-    var i = offset || 0, bth = _byteToHex;
-    return  bth[buf[i++]] + bth[buf[i++]] +
-            bth[buf[i++]] + bth[buf[i++]] + '-' +
-            bth[buf[i++]] + bth[buf[i++]] + '-' +
-            bth[buf[i++]] + bth[buf[i++]] + '-' +
-            bth[buf[i++]] + bth[buf[i++]] + '-' +
-            bth[buf[i++]] + bth[buf[i++]] +
-            bth[buf[i++]] + bth[buf[i++]] +
-            bth[buf[i++]] + bth[buf[i++]];
-  }
-
-  // **`v1()` - Generate time-based UUID**
-  //
-  // Inspired by https://github.com/LiosK/UUID.js
-  // and http://docs.python.org/library/uuid.html
-
-  // random #'s we need to init node and clockseq
-  var _seedBytes = _rng();
-
-  // Per 4.5, create and 48-bit node id, (47 random bits + multicast bit = 1)
-  var _nodeId = [
-    _seedBytes[0] | 0x01,
-    _seedBytes[1], _seedBytes[2], _seedBytes[3], _seedBytes[4], _seedBytes[5]
-  ];
-
-  // Per 4.2.2, randomize (14 bit) clockseq
-  var _clockseq = (_seedBytes[6] << 8 | _seedBytes[7]) & 0x3fff;
-
-  // Previous uuid creation time
-  var _lastMSecs = 0, _lastNSecs = 0;
-
-  // See https://github.com/broofa/node-uuid for API details
-  function v1(options, buf, offset) {
-    var i = buf && offset || 0;
-    var b = buf || [];
-
-    options = options || {};
-
-    var clockseq = (options.clockseq != null) ? options.clockseq : _clockseq;
-
-    // UUID timestamps are 100 nano-second units since the Gregorian epoch,
-    // (1582-10-15 00:00).  JSNumbers aren't precise enough for this, so
-    // time is handled internally as 'msecs' (integer milliseconds) and 'nsecs'
-    // (100-nanoseconds offset from msecs) since unix epoch, 1970-01-01 00:00.
-    var msecs = (options.msecs != null) ? options.msecs : new Date().getTime();
-
-    // Per 4.2.1.2, use count of uuid's generated during the current clock
-    // cycle to simulate higher resolution clock
-    var nsecs = (options.nsecs != null) ? options.nsecs : _lastNSecs + 1;
-
-    // Time since last uuid creation (in msecs)
-    var dt = (msecs - _lastMSecs) + (nsecs - _lastNSecs)/10000;
-
-    // Per 4.2.1.2, Bump clockseq on clock regression
-    if (dt < 0 && options.clockseq == null) {
-      clockseq = clockseq + 1 & 0x3fff;
-    }
-
-    // Reset nsecs if clock regresses (new clockseq) or we've moved onto a new
-    // time interval
-    if ((dt < 0 || msecs > _lastMSecs) && options.nsecs == null) {
-      nsecs = 0;
-    }
-
-    // Per 4.2.1.2 Throw error if too many uuids are requested
-    if (nsecs >= 10000) {
-      throw new Error('uuid.v1(): Can\'t create more than 10M uuids/sec');
-    }
-
-    _lastMSecs = msecs;
-    _lastNSecs = nsecs;
-    _clockseq = clockseq;
-
-    // Per 4.1.4 - Convert from unix epoch to Gregorian epoch
-    msecs += 12219292800000;
-
-    // `time_low`
-    var tl = ((msecs & 0xfffffff) * 10000 + nsecs) % 0x100000000;
-    b[i++] = tl >>> 24 & 0xff;
-    b[i++] = tl >>> 16 & 0xff;
-    b[i++] = tl >>> 8 & 0xff;
-    b[i++] = tl & 0xff;
-
-    // `time_mid`
-    var tmh = (msecs / 0x100000000 * 10000) & 0xfffffff;
-    b[i++] = tmh >>> 8 & 0xff;
-    b[i++] = tmh & 0xff;
-
-    // `time_high_and_version`
-    b[i++] = tmh >>> 24 & 0xf | 0x10; // include version
-    b[i++] = tmh >>> 16 & 0xff;
-
-    // `clock_seq_hi_and_reserved` (Per 4.2.2 - include variant)
-    b[i++] = clockseq >>> 8 | 0x80;
-
-    // `clock_seq_low`
-    b[i++] = clockseq & 0xff;
-
-    // `node`
-    var node = options.node || _nodeId;
-    for (var n = 0; n < 6; n++) {
-      b[i + n] = node[n];
-    }
-
-    return buf ? buf : unparse(b);
-  }
-
-  // **`v4()` - Generate random UUID**
-
-  // See https://github.com/broofa/node-uuid for API details
-  function v4(options, buf, offset) {
-    // Deprecated - 'format' argument, as supported in v1.2
-    var i = buf && offset || 0;
-
-    if (typeof(options) === 'string') {
-      buf = (options === 'binary') ? new BufferClass(16) : null;
-      options = null;
-    }
-    options = options || {};
-
-    var rnds = options.random || (options.rng || _rng)();
-
-    // Per 4.4, set bits for version and `clock_seq_hi_and_reserved`
-    rnds[6] = (rnds[6] & 0x0f) | 0x40;
-    rnds[8] = (rnds[8] & 0x3f) | 0x80;
-
-    // Copy bytes to buffer, if provided
-    if (buf) {
-      for (var ii = 0; ii < 16; ii++) {
-        buf[i + ii] = rnds[ii];
-      }
-    }
-
-    return buf || unparse(rnds);
-  }
-
-  // Export public API
-  var uuid = v4;
-  uuid.v1 = v1;
-  uuid.v4 = v4;
-  uuid.parse = parse;
-  uuid.unparse = unparse;
-  uuid.BufferClass = BufferClass;
-  uuid._rng = _rng;
-  uuid._mathRNG = _mathRNG;
-  uuid._nodeRNG = _nodeRNG;
-  uuid._whatwgRNG = _whatwgRNG;
-
-  if (('undefined' !== typeof module) && module.exports) {
-    // Publish as node.js module
-    module.exports = uuid;
-  } else if (typeof define === 'function' && define.amd) {
-    // Publish as AMD module
-    define(function() {return uuid;});
-
-
-  } else {
-    // Publish as global (in browsers)
-    _previousRoot = _window.uuid;
-
-    // **`noConflict()` - (browser only) to reset global 'uuid' var**
-    uuid.noConflict = function() {
-      _window.uuid = _previousRoot;
-      return uuid;
-    };
-
-    _window.uuid = uuid;
-  }
-})('undefined' !== typeof window ? window : null);
-
-}).call(this,require("buffer").Buffer)
-},{"buffer":69,"crypto":77}],16:[function(require,module,exports){
-'use strict';
-
-var GameObject = require('./GameObject');
-
-class Bullet extends GameObject {
-	constructor(position, radius = 7, health = 1, color = "black", outlineColor = 'rgba(80,80,80,1)') {
-		super(position, radius*2, color);
-		this.radius = radius;
-		this.health = health;
-		this.outlineColor = outlineColor;
-	}
-}
-
-module.exports = Bullet;
-
-},{"./GameObject":18}],17:[function(require,module,exports){
-'use strict';
-
-var GameObject = require('./GameObject');
-var Globals = require('../lib/Globals');
-
-class Collectible extends GameObject {
-	constructor(position, health = 100) {
-		super(position, 20, 'rgba(255,192,0,1)');
-		this.orientation = Math.random() * Globals.DEGREES_360;
-		this.health = health;
-		this.outlineColor = 'rgba(80,80,80,1)';
-	}
-}
-
-module.exports = Collectible;
-
-},{"../lib/Globals":11,"./GameObject":18}],18:[function(require,module,exports){
-'use strict';
-
-/* Abstract */
-class GameObject {
-	constructor(position, size, color, shape) {
-		if (this.constructor === GameObject) {
-			throw new Error("Attempt to instantiate abstract class GameObject.");
-		}
-		
-		this.position = position;
-		this.size = size;
-		this.color = color;
-		this.shape = shape; 
-	}
-	
-	update(deltaTime) {
-		throw new Error("Abstract method called: GameObject.prototype.update().");
-	}
-	
-	draw(ctx, transformToCameraCoords) {
-		throw new Error("Abstract method called: GameObject.prototype.draw().");
-	}
-}
-
-module.exports = GameObject;
-
-},{}],19:[function(require,module,exports){
-'use strict';
-
-class GameState {	
-	constructor(worldWidth, worldHeight) {
-		this.worldWidth = worldWidth;
-		this.worldHeight = worldHeight;
-	}
-}
-
-module.exports = GameState;
-
-},{}],20:[function(require,module,exports){
-'use strict';
-
-class InputUpdate {
-    constructor(sequenceNumber, keysPressed, keysClicked, mouseDirection, mousePosition, isMouseLeftButtonDown, isMouseRightButtonClicked, timestamp, deltaTime) {
-        this.sequenceNumber = sequenceNumber;
-        this.keysPressed = keysPressed;
-        this.keysClicked = keysClicked;
-        this.mouseDirection = mouseDirection;
-        this.mousePosition = mousePosition;
-        this.isMouseLeftButtonDown = isMouseLeftButtonDown;
-        this.isMouseRightButtonClicked = isMouseRightButtonClicked;
-        this.timestamp = timestamp;
-        this.deltaTime = deltaTime;
-    }
-}
-
-module.exports = InputUpdate;
-
-},{}],21:[function(require,module,exports){
-'use strict';
-
-var GameObject = require('./GameObject');
-var uuid = require('node-uuid');
-
-class Node extends GameObject{
-	constructor(position, parent, children, radius, health, color, outlineColor, id = uuid(), maxChildren = 2, maxLengthToChildren = 500, minLengthToChildren = 0) {
-		super(position, radius*2, color);
-		this.radius = radius; 
-		this.id = id;
-		this.health = health; 
-		//console.log("HEALTH IS "+this.health);
-		this.outlineColor = outlineColor; 
-		this.parent = parent; 
-		this.children = children; 
-		this.maxChildren = maxChildren;
-		this.maxLengthToChildren = maxLengthToChildren;
-		this.minLengthToChildren = minLengthToChildren;
-		if (parent === null){
-			this.distanceFromRoot = 0;
-			this.maxChildren = 3;
-		}
-		else this.distanceFromRoot = parent.distanceFromRoot + 1;
-	}
-
-	addParent(node){
-		this.parent = node;
-		this.distanceFromRoot = parent.distanceFromRoot + 1;
-	}
-
-	addChild(node){
-		this.children.push(node);
-	}
-
-	removeChild(i){
-		this.children.splice(i,1);
-	}
-
-	getTreeSize(){
-		var size = 1;
-		for (let i = 0; i < this.children.length; i++){
-			size += this.children[i].getTreeSize();
-		}
-		return size;
-	}
-
-	isHealthy(){
-		for (let i = 0; i<this.children.length; i++){
-			if (this.children[i].isHealthy() === false)
-				return false;
-		}
-		return this.health === 100;
-	}
-
-	// findNode(rt, id){
-	// 	if (rt.id === id) return rt;
-	// 	for (var i = 0; i < rt.children.length; i++){
-	// 		findNode(rt.children[i], id);
-	// 	}
-	// }
-
-	delete(){
-		if (this.parent !== null){
-			let children = this.parent.children;
-			for(let i = 0; children.length; i++){
-				if (children[i] === this){
-					this.parent.removeChild(i);
-					break;
-				}
-			}
-		}
-		//this.parent = null;
-	}
-}
-
-module.exports = Node;
-},{"./GameObject":18,"node-uuid":15}],22:[function(require,module,exports){
-'use strict';
-
-var GameObject = require('./GameObject');
-var Vector2D = require('../lib/Vector2D');
-var Globals = require('../lib/Globals');
-
-const DIAG_ACCEL_FACTOR = Math.cos(Math.PI/4);
-
-class Player extends GameObject {
-	constructor(velocity, position, color) {
-		super(position, 40, color);
-
-		this.velocity = velocity;
-	}
-	
-	update(deltaTime, keysPressed, mouseDirection) {
-		let acceleration = new Vector2D(0, 0);
-		if (keysPressed.numDirKeysPressed === 2) {
-			let axisAcceleration = this.acceleration * DIAG_ACCEL_FACTOR;
-			if ('W' in keysPressed && 'A' in keysPressed) {
-				acceleration.set(-axisAcceleration, -axisAcceleration);
-			}
-			else if ('S' in keysPressed && 'A' in keysPressed) {
-				acceleration.set(-axisAcceleration, axisAcceleration);
-			}
-			else if ('S' in keysPressed && 'D' in keysPressed) {
-				acceleration.set(axisAcceleration, axisAcceleration);
-			}
-			else if ('W' in keysPressed && 'D' in keysPressed) {
-				acceleration.set(axisAcceleration, -axisAcceleration);
-			}
-		}
-		else if (keysPressed.numDirKeysPressed === 1){
-			if ('W' in keysPressed) {
-				acceleration.y = -this.acceleration;
-			}
-			else if ('A' in keysPressed) {
-				acceleration.x = -this.acceleration;
-			}
-			else if ('S' in keysPressed) {
-				acceleration.y = this.acceleration;
-			}
-			else if ('D' in keysPressed) {
-				acceleration.x = this.acceleration;
-			}
-		}
-		else {
-			if (this.velocity.getLength() < this.minSpeed) {
-				this.velocity.set(0, 0);
-			}
-			else {
-				acceleration.copy(this.velocity)
-							.setLength(this.deceleration)
-							.neg();
-			}
-		}
-		
-		this.velocity.add(new Vector2D().copy(acceleration).mul(deltaTime));
-		if (this.velocity.getLength() > this.maxSpeed) {
-			this.velocity.setLength(this.maxSpeed);
-		}
-		
-		let displacement = new Vector2D().copy(this.velocity).mul(deltaTime);
-		this.position.add(displacement);
-		
-		this.orientation = this.convertToOrientation(mouseDirection);
-		
-		return displacement;
-	}
-	
-	convertToOrientation(direction) {
-		if (direction.x !== 0) {
-			let orientation = Math.atan2(direction.y, direction.x);
-			if (orientation < 0) {
-				orientation += Globals.DEGREES_360;
-			}
-			return orientation;
-		}
-		else if (direction.y > 0) {
-			return Globals.DEGREES_90;
-		}
-		else {
-			return Globals.DEGREES_270;
-		}
-	}
-}
-
-module.exports = Player;
-
-},{"../lib/Globals":11,"../lib/Vector2D":14,"./GameObject":18}],23:[function(require,module,exports){
-'use strict';
-
-var GameObject = require('./GameObject');
-var Vector2D = require('../lib/Vector2D');
-
-class Weapon extends GameObject {
-	constructor(name, distanceFromPlayer, size, color, outlineColor = 'rgba(80,80,80,1)') {
-		super(new Vector2D(distanceFromPlayer, -size/2), size, color);
-		this.name = name;
-		this.distanceFromPlayer = distanceFromPlayer;
-		this.outlineColor = outlineColor;
-	}
-}
-
-module.exports = Weapon;
-
-},{"../lib/Vector2D":14,"./GameObject":18}],24:[function(require,module,exports){
 var asn1 = exports;
 
 asn1.bignum = require('bn.js');
@@ -1799,7 +9,7 @@ asn1.constants = require('./asn1/constants');
 asn1.decoders = require('./asn1/decoders');
 asn1.encoders = require('./asn1/encoders');
 
-},{"./asn1/api":25,"./asn1/base":27,"./asn1/constants":31,"./asn1/decoders":33,"./asn1/encoders":36,"bn.js":39}],25:[function(require,module,exports){
+},{"./asn1/api":2,"./asn1/base":4,"./asn1/constants":8,"./asn1/decoders":10,"./asn1/encoders":13,"bn.js":16}],2:[function(require,module,exports){
 var asn1 = require('../asn1');
 var inherits = require('inherits');
 
@@ -1862,7 +72,7 @@ Entity.prototype.encode = function encode(data, enc, /* internal */ reporter) {
   return this._getEncoder(enc).encode(data, reporter);
 };
 
-},{"../asn1":24,"inherits":115,"vm":161}],26:[function(require,module,exports){
+},{"../asn1":1,"inherits":92,"vm":137}],3:[function(require,module,exports){
 var inherits = require('inherits');
 var Reporter = require('../base').Reporter;
 var Buffer = require('buffer').Buffer;
@@ -1980,7 +190,7 @@ EncoderBuffer.prototype.join = function join(out, offset) {
   return out;
 };
 
-},{"../base":27,"buffer":69,"inherits":115}],27:[function(require,module,exports){
+},{"../base":4,"buffer":46,"inherits":92}],4:[function(require,module,exports){
 var base = exports;
 
 base.Reporter = require('./reporter').Reporter;
@@ -1988,7 +198,7 @@ base.DecoderBuffer = require('./buffer').DecoderBuffer;
 base.EncoderBuffer = require('./buffer').EncoderBuffer;
 base.Node = require('./node');
 
-},{"./buffer":26,"./node":28,"./reporter":29}],28:[function(require,module,exports){
+},{"./buffer":3,"./node":5,"./reporter":6}],5:[function(require,module,exports){
 var Reporter = require('../base').Reporter;
 var EncoderBuffer = require('../base').EncoderBuffer;
 var DecoderBuffer = require('../base').DecoderBuffer;
@@ -2624,7 +834,7 @@ Node.prototype._isPrintstr = function isPrintstr(str) {
   return /^[A-Za-z0-9 '\(\)\+,\-\.\/:=\?]*$/.test(str);
 };
 
-},{"../base":27,"minimalistic-assert":119}],29:[function(require,module,exports){
+},{"../base":4,"minimalistic-assert":96}],6:[function(require,module,exports){
 var inherits = require('inherits');
 
 function Reporter(options) {
@@ -2747,7 +957,7 @@ ReporterError.prototype.rethrow = function rethrow(msg) {
   return this;
 };
 
-},{"inherits":115}],30:[function(require,module,exports){
+},{"inherits":92}],7:[function(require,module,exports){
 var constants = require('../constants');
 
 exports.tagClass = {
@@ -2791,7 +1001,7 @@ exports.tag = {
 };
 exports.tagByName = constants._reverse(exports.tag);
 
-},{"../constants":31}],31:[function(require,module,exports){
+},{"../constants":8}],8:[function(require,module,exports){
 var constants = exports;
 
 // Helper
@@ -2812,7 +1022,7 @@ constants._reverse = function reverse(map) {
 
 constants.der = require('./der');
 
-},{"./der":30}],32:[function(require,module,exports){
+},{"./der":7}],9:[function(require,module,exports){
 var inherits = require('inherits');
 
 var asn1 = require('../../asn1');
@@ -3138,13 +1348,13 @@ function derDecodeLen(buf, primitive, fail) {
   return len;
 }
 
-},{"../../asn1":24,"inherits":115}],33:[function(require,module,exports){
+},{"../../asn1":1,"inherits":92}],10:[function(require,module,exports){
 var decoders = exports;
 
 decoders.der = require('./der');
 decoders.pem = require('./pem');
 
-},{"./der":32,"./pem":34}],34:[function(require,module,exports){
+},{"./der":9,"./pem":11}],11:[function(require,module,exports){
 var inherits = require('inherits');
 var Buffer = require('buffer').Buffer;
 
@@ -3195,7 +1405,7 @@ PEMDecoder.prototype.decode = function decode(data, options) {
   return DERDecoder.prototype.decode.call(this, input, options);
 };
 
-},{"./der":32,"buffer":69,"inherits":115}],35:[function(require,module,exports){
+},{"./der":9,"buffer":46,"inherits":92}],12:[function(require,module,exports){
 var inherits = require('inherits');
 var Buffer = require('buffer').Buffer;
 
@@ -3492,13 +1702,13 @@ function encodeTag(tag, primitive, cls, reporter) {
   return res;
 }
 
-},{"../../asn1":24,"buffer":69,"inherits":115}],36:[function(require,module,exports){
+},{"../../asn1":1,"buffer":46,"inherits":92}],13:[function(require,module,exports){
 var encoders = exports;
 
 encoders.der = require('./der');
 encoders.pem = require('./pem');
 
-},{"./der":35,"./pem":37}],37:[function(require,module,exports){
+},{"./der":12,"./pem":14}],14:[function(require,module,exports){
 var inherits = require('inherits');
 
 var DEREncoder = require('./der');
@@ -3521,7 +1731,7 @@ PEMEncoder.prototype.encode = function encode(data, options) {
   return out.join('\n');
 };
 
-},{"./der":35,"inherits":115}],38:[function(require,module,exports){
+},{"./der":12,"inherits":92}],15:[function(require,module,exports){
 'use strict'
 
 exports.byteLength = byteLength
@@ -3637,7 +1847,7 @@ function fromByteArray (uint8) {
   return parts.join('')
 }
 
-},{}],39:[function(require,module,exports){
+},{}],16:[function(require,module,exports){
 (function (module, exports) {
   'use strict';
 
@@ -7066,7 +5276,7 @@ function fromByteArray (uint8) {
   };
 })(typeof module === 'undefined' || module, this);
 
-},{}],40:[function(require,module,exports){
+},{}],17:[function(require,module,exports){
 var r;
 
 module.exports = function rand(len) {
@@ -7133,9 +5343,9 @@ if (typeof self === 'object') {
   }
 }
 
-},{"crypto":41}],41:[function(require,module,exports){
+},{"crypto":18}],18:[function(require,module,exports){
 
-},{}],42:[function(require,module,exports){
+},{}],19:[function(require,module,exports){
 (function (Buffer){
 // based on the aes implimentation in triple sec
 // https://github.com/keybase/triplesec
@@ -7316,7 +5526,7 @@ AES.prototype._doCryptBlock = function (M, keySchedule, SUB_MIX, SBOX) {
 exports.AES = AES
 
 }).call(this,require("buffer").Buffer)
-},{"buffer":69}],43:[function(require,module,exports){
+},{"buffer":46}],20:[function(require,module,exports){
 (function (Buffer){
 var aes = require('./aes')
 var Transform = require('cipher-base')
@@ -7417,7 +5627,7 @@ function xorTest (a, b) {
 }
 
 }).call(this,require("buffer").Buffer)
-},{"./aes":42,"./ghash":47,"buffer":69,"buffer-xor":68,"cipher-base":70,"inherits":115}],44:[function(require,module,exports){
+},{"./aes":19,"./ghash":24,"buffer":46,"buffer-xor":45,"cipher-base":47,"inherits":92}],21:[function(require,module,exports){
 var ciphers = require('./encrypter')
 exports.createCipher = exports.Cipher = ciphers.createCipher
 exports.createCipheriv = exports.Cipheriv = ciphers.createCipheriv
@@ -7430,7 +5640,7 @@ function getCiphers () {
 }
 exports.listCiphers = exports.getCiphers = getCiphers
 
-},{"./decrypter":45,"./encrypter":46,"./modes":48}],45:[function(require,module,exports){
+},{"./decrypter":22,"./encrypter":23,"./modes":25}],22:[function(require,module,exports){
 (function (Buffer){
 var aes = require('./aes')
 var Transform = require('cipher-base')
@@ -7571,7 +5781,7 @@ exports.createDecipher = createDecipher
 exports.createDecipheriv = createDecipheriv
 
 }).call(this,require("buffer").Buffer)
-},{"./aes":42,"./authCipher":43,"./modes":48,"./modes/cbc":49,"./modes/cfb":50,"./modes/cfb1":51,"./modes/cfb8":52,"./modes/ctr":53,"./modes/ecb":54,"./modes/ofb":55,"./streamCipher":56,"buffer":69,"cipher-base":70,"evp_bytestokey":105,"inherits":115}],46:[function(require,module,exports){
+},{"./aes":19,"./authCipher":20,"./modes":25,"./modes/cbc":26,"./modes/cfb":27,"./modes/cfb1":28,"./modes/cfb8":29,"./modes/ctr":30,"./modes/ecb":31,"./modes/ofb":32,"./streamCipher":33,"buffer":46,"cipher-base":47,"evp_bytestokey":82,"inherits":92}],23:[function(require,module,exports){
 (function (Buffer){
 var aes = require('./aes')
 var Transform = require('cipher-base')
@@ -7697,7 +5907,7 @@ exports.createCipheriv = createCipheriv
 exports.createCipher = createCipher
 
 }).call(this,require("buffer").Buffer)
-},{"./aes":42,"./authCipher":43,"./modes":48,"./modes/cbc":49,"./modes/cfb":50,"./modes/cfb1":51,"./modes/cfb8":52,"./modes/ctr":53,"./modes/ecb":54,"./modes/ofb":55,"./streamCipher":56,"buffer":69,"cipher-base":70,"evp_bytestokey":105,"inherits":115}],47:[function(require,module,exports){
+},{"./aes":19,"./authCipher":20,"./modes":25,"./modes/cbc":26,"./modes/cfb":27,"./modes/cfb1":28,"./modes/cfb8":29,"./modes/ctr":30,"./modes/ecb":31,"./modes/ofb":32,"./streamCipher":33,"buffer":46,"cipher-base":47,"evp_bytestokey":82,"inherits":92}],24:[function(require,module,exports){
 (function (Buffer){
 var zeros = new Buffer(16)
 zeros.fill(0)
@@ -7799,7 +6009,7 @@ function xor (a, b) {
 }
 
 }).call(this,require("buffer").Buffer)
-},{"buffer":69}],48:[function(require,module,exports){
+},{"buffer":46}],25:[function(require,module,exports){
 exports['aes-128-ecb'] = {
   cipher: 'AES',
   key: 128,
@@ -7972,7 +6182,7 @@ exports['aes-256-gcm'] = {
   type: 'auth'
 }
 
-},{}],49:[function(require,module,exports){
+},{}],26:[function(require,module,exports){
 var xor = require('buffer-xor')
 
 exports.encrypt = function (self, block) {
@@ -7991,7 +6201,7 @@ exports.decrypt = function (self, block) {
   return xor(out, pad)
 }
 
-},{"buffer-xor":68}],50:[function(require,module,exports){
+},{"buffer-xor":45}],27:[function(require,module,exports){
 (function (Buffer){
 var xor = require('buffer-xor')
 
@@ -8026,7 +6236,7 @@ function encryptStart (self, data, decrypt) {
 }
 
 }).call(this,require("buffer").Buffer)
-},{"buffer":69,"buffer-xor":68}],51:[function(require,module,exports){
+},{"buffer":46,"buffer-xor":45}],28:[function(require,module,exports){
 (function (Buffer){
 function encryptByte (self, byteParam, decrypt) {
   var pad
@@ -8064,7 +6274,7 @@ function shiftIn (buffer, value) {
 }
 
 }).call(this,require("buffer").Buffer)
-},{"buffer":69}],52:[function(require,module,exports){
+},{"buffer":46}],29:[function(require,module,exports){
 (function (Buffer){
 function encryptByte (self, byteParam, decrypt) {
   var pad = self._cipher.encryptBlock(self._prev)
@@ -8083,7 +6293,7 @@ exports.encrypt = function (self, chunk, decrypt) {
 }
 
 }).call(this,require("buffer").Buffer)
-},{"buffer":69}],53:[function(require,module,exports){
+},{"buffer":46}],30:[function(require,module,exports){
 (function (Buffer){
 var xor = require('buffer-xor')
 
@@ -8118,7 +6328,7 @@ exports.encrypt = function (self, chunk) {
 }
 
 }).call(this,require("buffer").Buffer)
-},{"buffer":69,"buffer-xor":68}],54:[function(require,module,exports){
+},{"buffer":46,"buffer-xor":45}],31:[function(require,module,exports){
 exports.encrypt = function (self, block) {
   return self._cipher.encryptBlock(block)
 }
@@ -8126,7 +6336,7 @@ exports.decrypt = function (self, block) {
   return self._cipher.decryptBlock(block)
 }
 
-},{}],55:[function(require,module,exports){
+},{}],32:[function(require,module,exports){
 (function (Buffer){
 var xor = require('buffer-xor')
 
@@ -8146,7 +6356,7 @@ exports.encrypt = function (self, chunk) {
 }
 
 }).call(this,require("buffer").Buffer)
-},{"buffer":69,"buffer-xor":68}],56:[function(require,module,exports){
+},{"buffer":46,"buffer-xor":45}],33:[function(require,module,exports){
 (function (Buffer){
 var aes = require('./aes')
 var Transform = require('cipher-base')
@@ -8175,7 +6385,7 @@ StreamCipher.prototype._final = function () {
 }
 
 }).call(this,require("buffer").Buffer)
-},{"./aes":42,"buffer":69,"cipher-base":70,"inherits":115}],57:[function(require,module,exports){
+},{"./aes":19,"buffer":46,"cipher-base":47,"inherits":92}],34:[function(require,module,exports){
 var ebtk = require('evp_bytestokey')
 var aes = require('browserify-aes/browser')
 var DES = require('browserify-des')
@@ -8250,7 +6460,7 @@ function getCiphers () {
 }
 exports.listCiphers = exports.getCiphers = getCiphers
 
-},{"browserify-aes/browser":44,"browserify-aes/modes":48,"browserify-des":58,"browserify-des/modes":59,"evp_bytestokey":105}],58:[function(require,module,exports){
+},{"browserify-aes/browser":21,"browserify-aes/modes":25,"browserify-des":35,"browserify-des/modes":36,"evp_bytestokey":82}],35:[function(require,module,exports){
 (function (Buffer){
 var CipherBase = require('cipher-base')
 var des = require('des.js')
@@ -8297,7 +6507,7 @@ DES.prototype._final = function () {
 }
 
 }).call(this,require("buffer").Buffer)
-},{"buffer":69,"cipher-base":70,"des.js":78,"inherits":115}],59:[function(require,module,exports){
+},{"buffer":46,"cipher-base":47,"des.js":55,"inherits":92}],36:[function(require,module,exports){
 exports['des-ecb'] = {
   key: 8,
   iv: 0
@@ -8323,7 +6533,7 @@ exports['des-ede'] = {
   iv: 0
 }
 
-},{}],60:[function(require,module,exports){
+},{}],37:[function(require,module,exports){
 (function (Buffer){
 var bn = require('bn.js');
 var randomBytes = require('randombytes');
@@ -8367,10 +6577,10 @@ function getr(priv) {
 }
 
 }).call(this,require("buffer").Buffer)
-},{"bn.js":39,"buffer":69,"randombytes":136}],61:[function(require,module,exports){
+},{"bn.js":16,"buffer":46,"randombytes":113}],38:[function(require,module,exports){
 module.exports = require('./browser/algorithms.json')
 
-},{"./browser/algorithms.json":62}],62:[function(require,module,exports){
+},{"./browser/algorithms.json":39}],39:[function(require,module,exports){
 module.exports={
   "sha224WithRSAEncryption": {
     "sign": "rsa",
@@ -8524,7 +6734,7 @@ module.exports={
   }
 }
 
-},{}],63:[function(require,module,exports){
+},{}],40:[function(require,module,exports){
 module.exports={
   "1.3.132.0.10": "secp256k1",
   "1.3.132.0.33": "p224",
@@ -8534,7 +6744,7 @@ module.exports={
   "1.3.132.0.35": "p521"
 }
 
-},{}],64:[function(require,module,exports){
+},{}],41:[function(require,module,exports){
 (function (Buffer){
 var createHash = require('create-hash')
 var stream = require('stream')
@@ -8629,7 +6839,7 @@ module.exports = {
 }
 
 }).call(this,require("buffer").Buffer)
-},{"./algorithms.json":62,"./sign":65,"./verify":66,"buffer":69,"create-hash":73,"inherits":115,"stream":158}],65:[function(require,module,exports){
+},{"./algorithms.json":39,"./sign":42,"./verify":43,"buffer":46,"create-hash":50,"inherits":92,"stream":134}],42:[function(require,module,exports){
 (function (Buffer){
 // much of this based on https://github.com/indutny/self-signed/blob/gh-pages/lib/rsa.js
 var createHmac = require('create-hmac')
@@ -8778,7 +6988,7 @@ module.exports.getKey = getKey
 module.exports.makeKey = makeKey
 
 }).call(this,require("buffer").Buffer)
-},{"./curves.json":63,"bn.js":39,"browserify-rsa":60,"buffer":69,"create-hmac":76,"elliptic":88,"parse-asn1":125}],66:[function(require,module,exports){
+},{"./curves.json":40,"bn.js":16,"browserify-rsa":37,"buffer":46,"create-hmac":53,"elliptic":65,"parse-asn1":102}],43:[function(require,module,exports){
 (function (Buffer){
 // much of this based on https://github.com/indutny/self-signed/blob/gh-pages/lib/rsa.js
 var BN = require('bn.js')
@@ -8865,7 +7075,7 @@ function checkValue (b, q) {
 module.exports = verify
 
 }).call(this,require("buffer").Buffer)
-},{"./curves.json":63,"bn.js":39,"buffer":69,"elliptic":88,"parse-asn1":125}],67:[function(require,module,exports){
+},{"./curves.json":40,"bn.js":16,"buffer":46,"elliptic":65,"parse-asn1":102}],44:[function(require,module,exports){
 (function (global){
 'use strict';
 
@@ -8977,7 +7187,7 @@ exports.allocUnsafeSlow = function allocUnsafeSlow(size) {
 }
 
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{"buffer":69}],68:[function(require,module,exports){
+},{"buffer":46}],45:[function(require,module,exports){
 (function (Buffer){
 module.exports = function xor (a, b) {
   var length = Math.min(a.length, b.length)
@@ -8991,7 +7201,7 @@ module.exports = function xor (a, b) {
 }
 
 }).call(this,require("buffer").Buffer)
-},{"buffer":69}],69:[function(require,module,exports){
+},{"buffer":46}],46:[function(require,module,exports){
 /*!
  * The buffer module from node.js, for the browser.
  *
@@ -9246,8 +7456,8 @@ function fromObject (obj) {
   }
 
   if (obj) {
-    if (isArrayBufferView(obj) || 'length' in obj) {
-      if (typeof obj.length !== 'number' || numberIsNaN(obj.length)) {
+    if (ArrayBuffer.isView(obj) || 'length' in obj) {
+      if (typeof obj.length !== 'number' || isnan(obj.length)) {
         return createBuffer(0)
       }
       return fromArrayLike(obj)
@@ -9358,7 +7568,7 @@ function byteLength (string, encoding) {
   if (Buffer.isBuffer(string)) {
     return string.length
   }
-  if (isArrayBufferView(string) || string instanceof ArrayBuffer) {
+  if (ArrayBuffer.isView(string) || string instanceof ArrayBuffer) {
     return string.byteLength
   }
   if (typeof string !== 'string') {
@@ -9624,7 +7834,7 @@ function bidirectionalIndexOf (buffer, val, byteOffset, encoding, dir) {
     byteOffset = -0x80000000
   }
   byteOffset = +byteOffset  // Coerce to Number.
-  if (numberIsNaN(byteOffset)) {
+  if (isNaN(byteOffset)) {
     // byteOffset: it it's undefined, null, NaN, "foo", etc, search whole buffer
     byteOffset = dir ? 0 : (buffer.length - 1)
   }
@@ -9755,7 +7965,7 @@ function hexWrite (buf, string, offset, length) {
   }
   for (var i = 0; i < length; ++i) {
     var parsed = parseInt(string.substr(i * 2, 2), 16)
-    if (numberIsNaN(parsed)) return i
+    if (isNaN(parsed)) return i
     buf[offset + i] = parsed
   }
   return i
@@ -10558,7 +8768,7 @@ var INVALID_BASE64_RE = /[^+/0-9A-Za-z-_]/g
 
 function base64clean (str) {
   // Node strips out invalid characters like \n and \t from the string, base64-js does not
-  str = str.trim().replace(INVALID_BASE64_RE, '')
+  str = stringtrim(str).replace(INVALID_BASE64_RE, '')
   // Node converts strings with length < 2 to ''
   if (str.length < 2) return ''
   // Node allows for non-padded base64 strings (missing trailing ===), base64-js does not
@@ -10566,6 +8776,11 @@ function base64clean (str) {
     str = str + '='
   }
   return str
+}
+
+function stringtrim (str) {
+  if (str.trim) return str.trim()
+  return str.replace(/^\s+|\s+$/g, '')
 }
 
 function toHex (n) {
@@ -10690,16 +8905,11 @@ function blitBuffer (src, dst, offset, length) {
   return i
 }
 
-// Node 0.10 supports `ArrayBuffer` but lacks `ArrayBuffer.isView`
-function isArrayBufferView (obj) {
-  return (typeof ArrayBuffer.isView === 'function') && ArrayBuffer.isView(obj)
+function isnan (val) {
+  return val !== val // eslint-disable-line no-self-compare
 }
 
-function numberIsNaN (obj) {
-  return obj !== obj // eslint-disable-line no-self-compare
-}
-
-},{"base64-js":38,"ieee754":113}],70:[function(require,module,exports){
+},{"base64-js":15,"ieee754":90}],47:[function(require,module,exports){
 (function (Buffer){
 var Transform = require('stream').Transform
 var inherits = require('inherits')
@@ -10793,7 +9003,7 @@ CipherBase.prototype._toString = function (value, enc, fin) {
 }
 
 }).call(this,require("buffer").Buffer)
-},{"buffer":69,"inherits":115,"stream":158,"string_decoder":159}],71:[function(require,module,exports){
+},{"buffer":46,"inherits":92,"stream":134,"string_decoder":135}],48:[function(require,module,exports){
 (function (Buffer){
 // Copyright Joyent, Inc. and other Node contributors.
 //
@@ -10904,7 +9114,7 @@ function objectToString(o) {
 }
 
 }).call(this,{"isBuffer":require("../../is-buffer/index.js")})
-},{"../../is-buffer/index.js":116}],72:[function(require,module,exports){
+},{"../../is-buffer/index.js":93}],49:[function(require,module,exports){
 (function (Buffer){
 var elliptic = require('elliptic');
 var BN = require('bn.js');
@@ -11030,7 +9240,7 @@ function formatReturnValue(bn, enc, len) {
 }
 
 }).call(this,require("buffer").Buffer)
-},{"bn.js":39,"buffer":69,"elliptic":88}],73:[function(require,module,exports){
+},{"bn.js":16,"buffer":46,"elliptic":65}],50:[function(require,module,exports){
 (function (Buffer){
 'use strict';
 var inherits = require('inherits')
@@ -11086,7 +9296,7 @@ module.exports = function createHash (alg) {
 }
 
 }).call(this,require("buffer").Buffer)
-},{"./md5":75,"buffer":69,"cipher-base":70,"inherits":115,"ripemd160":149,"sha.js":151}],74:[function(require,module,exports){
+},{"./md5":52,"buffer":46,"cipher-base":47,"inherits":92,"ripemd160":125,"sha.js":127}],51:[function(require,module,exports){
 (function (Buffer){
 'use strict';
 var intSize = 4;
@@ -11123,7 +9333,7 @@ function hash(buf, fn, hashSize, bigEndian) {
 }
 exports.hash = hash;
 }).call(this,require("buffer").Buffer)
-},{"buffer":69}],75:[function(require,module,exports){
+},{"buffer":46}],52:[function(require,module,exports){
 'use strict';
 /*
  * A JavaScript implementation of the RSA Data Security, Inc. MD5 Message
@@ -11280,7 +9490,7 @@ function bit_rol(num, cnt)
 module.exports = function md5(buf) {
   return helpers.hash(buf, core_md5, 16);
 };
-},{"./helpers":74}],76:[function(require,module,exports){
+},{"./helpers":51}],53:[function(require,module,exports){
 (function (Buffer){
 'use strict';
 var createHash = require('create-hash/browser');
@@ -11352,7 +9562,7 @@ module.exports = function createHmac(alg, key) {
 }
 
 }).call(this,require("buffer").Buffer)
-},{"buffer":69,"create-hash/browser":73,"inherits":115,"stream":158}],77:[function(require,module,exports){
+},{"buffer":46,"create-hash/browser":50,"inherits":92,"stream":134}],54:[function(require,module,exports){
 'use strict'
 
 exports.randomBytes = exports.rng = exports.pseudoRandomBytes = exports.prng = require('randombytes')
@@ -11431,7 +9641,7 @@ var publicEncrypt = require('public-encrypt')
   }
 })
 
-},{"browserify-cipher":57,"browserify-sign":64,"browserify-sign/algos":61,"create-ecdh":72,"create-hash":73,"create-hmac":76,"diffie-hellman":84,"pbkdf2":126,"public-encrypt":130,"randombytes":136}],78:[function(require,module,exports){
+},{"browserify-cipher":34,"browserify-sign":41,"browserify-sign/algos":38,"create-ecdh":49,"create-hash":50,"create-hmac":53,"diffie-hellman":61,"pbkdf2":103,"public-encrypt":107,"randombytes":113}],55:[function(require,module,exports){
 'use strict';
 
 exports.utils = require('./des/utils');
@@ -11440,7 +9650,7 @@ exports.DES = require('./des/des');
 exports.CBC = require('./des/cbc');
 exports.EDE = require('./des/ede');
 
-},{"./des/cbc":79,"./des/cipher":80,"./des/des":81,"./des/ede":82,"./des/utils":83}],79:[function(require,module,exports){
+},{"./des/cbc":56,"./des/cipher":57,"./des/des":58,"./des/ede":59,"./des/utils":60}],56:[function(require,module,exports){
 'use strict';
 
 var assert = require('minimalistic-assert');
@@ -11507,7 +9717,7 @@ proto._update = function _update(inp, inOff, out, outOff) {
   }
 };
 
-},{"inherits":115,"minimalistic-assert":119}],80:[function(require,module,exports){
+},{"inherits":92,"minimalistic-assert":96}],57:[function(require,module,exports){
 'use strict';
 
 var assert = require('minimalistic-assert');
@@ -11650,7 +9860,7 @@ Cipher.prototype._finalDecrypt = function _finalDecrypt() {
   return this._unpad(out);
 };
 
-},{"minimalistic-assert":119}],81:[function(require,module,exports){
+},{"minimalistic-assert":96}],58:[function(require,module,exports){
 'use strict';
 
 var assert = require('minimalistic-assert');
@@ -11795,7 +10005,7 @@ DES.prototype._decrypt = function _decrypt(state, lStart, rStart, out, off) {
   utils.rip(l, r, out, off);
 };
 
-},{"../des":78,"inherits":115,"minimalistic-assert":119}],82:[function(require,module,exports){
+},{"../des":55,"inherits":92,"minimalistic-assert":96}],59:[function(require,module,exports){
 'use strict';
 
 var assert = require('minimalistic-assert');
@@ -11852,7 +10062,7 @@ EDE.prototype._update = function _update(inp, inOff, out, outOff) {
 EDE.prototype._pad = DES.prototype._pad;
 EDE.prototype._unpad = DES.prototype._unpad;
 
-},{"../des":78,"inherits":115,"minimalistic-assert":119}],83:[function(require,module,exports){
+},{"../des":55,"inherits":92,"minimalistic-assert":96}],60:[function(require,module,exports){
 'use strict';
 
 exports.readUInt32BE = function readUInt32BE(bytes, off) {
@@ -12110,7 +10320,7 @@ exports.padSplit = function padSplit(num, size, group) {
   return out.join(' ');
 };
 
-},{}],84:[function(require,module,exports){
+},{}],61:[function(require,module,exports){
 (function (Buffer){
 var generatePrime = require('./lib/generatePrime')
 var primes = require('./lib/primes.json')
@@ -12156,7 +10366,7 @@ exports.DiffieHellmanGroup = exports.createDiffieHellmanGroup = exports.getDiffi
 exports.createDiffieHellman = exports.DiffieHellman = createDiffieHellman
 
 }).call(this,require("buffer").Buffer)
-},{"./lib/dh":85,"./lib/generatePrime":86,"./lib/primes.json":87,"buffer":69}],85:[function(require,module,exports){
+},{"./lib/dh":62,"./lib/generatePrime":63,"./lib/primes.json":64,"buffer":46}],62:[function(require,module,exports){
 (function (Buffer){
 var BN = require('bn.js');
 var MillerRabin = require('miller-rabin');
@@ -12324,7 +10534,7 @@ function formatReturnValue(bn, enc) {
 }
 
 }).call(this,require("buffer").Buffer)
-},{"./generatePrime":86,"bn.js":39,"buffer":69,"miller-rabin":118,"randombytes":136}],86:[function(require,module,exports){
+},{"./generatePrime":63,"bn.js":16,"buffer":46,"miller-rabin":95,"randombytes":113}],63:[function(require,module,exports){
 var randomBytes = require('randombytes');
 module.exports = findPrime;
 findPrime.simpleSieve = simpleSieve;
@@ -12431,7 +10641,7 @@ function findPrime(bits, gen) {
 
 }
 
-},{"bn.js":39,"miller-rabin":118,"randombytes":136}],87:[function(require,module,exports){
+},{"bn.js":16,"miller-rabin":95,"randombytes":113}],64:[function(require,module,exports){
 module.exports={
     "modp1": {
         "gen": "02",
@@ -12466,7 +10676,7 @@ module.exports={
         "prime": "ffffffffffffffffc90fdaa22168c234c4c6628b80dc1cd129024e088a67cc74020bbea63b139b22514a08798e3404ddef9519b3cd3a431b302b0a6df25f14374fe1356d6d51c245e485b576625e7ec6f44c42e9a637ed6b0bff5cb6f406b7edee386bfb5a899fa5ae9f24117c4b1fe649286651ece45b3dc2007cb8a163bf0598da48361c55d39a69163fa8fd24cf5f83655d23dca3ad961c62f356208552bb9ed529077096966d670c354e4abc9804f1746c08ca18217c32905e462e36ce3be39e772c180e86039b2783a2ec07a28fb5c55df06f4c52c9de2bcbf6955817183995497cea956ae515d2261898fa051015728e5a8aaac42dad33170d04507a33a85521abdf1cba64ecfb850458dbef0a8aea71575d060c7db3970f85a6e1e4c7abf5ae8cdb0933d71e8c94e04a25619dcee3d2261ad2ee6bf12ffa06d98a0864d87602733ec86a64521f2b18177b200cbbe117577a615d6c770988c0bad946e208e24fa074e5ab3143db5bfce0fd108e4b82d120a92108011a723c12a787e6d788719a10bdba5b2699c327186af4e23c1a946834b6150bda2583e9ca2ad44ce8dbbbc2db04de8ef92e8efc141fbecaa6287c59474e6bc05d99b2964fa090c3a2233ba186515be7ed1f612970cee2d7afb81bdd762170481cd0069127d5b05aa993b4ea988d8fddc186ffb7dc90a6c08f4df435c93402849236c3fab4d27c7026c1d4dcb2602646dec9751e763dba37bdf8ff9406ad9e530ee5db382f413001aeb06a53ed9027d831179727b0865a8918da3edbebcf9b14ed44ce6cbaced4bb1bdb7f1447e6cc254b332051512bd7af426fb8f401378cd2bf5983ca01c64b92ecf032ea15d1721d03f482d7ce6e74fef6d55e702f46980c82b5a84031900b1c9e59e7c97fbec7e8f323a97a7e36cc88be0f1d45b7ff585ac54bd407b22b4154aacc8f6d7ebf48e1d814cc5ed20f8037e0a79715eef29be32806a1d58bb7c5da76f550aa3d8a1fbff0eb19ccb1a313d55cda56c9ec2ef29632387fe8d76e3c0468043e8f663f4860ee12bf2d5b0b7474d6e694f91e6dbe115974a3926f12fee5e438777cb6a932df8cd8bec4d073b931ba3bc832b68d9dd300741fa7bf8afc47ed2576f6936ba424663aab639c5ae4f5683423b4742bf1c978238f16cbe39d652de3fdb8befc848ad922222e04a4037c0713eb57a81a23f0c73473fc646cea306b4bcbc8862f8385ddfa9d4b7fa2c087e879683303ed5bdd3a062b3cf5b3a278a66d2a13f83f44f82ddf310ee074ab6a364597e899a0255dc164f31cc50846851df9ab48195ded7ea1b1d510bd7ee74d73faf36bc31ecfa268359046f4eb879f924009438b481c6cd7889a002ed5ee382bc9190da6fc026e479558e4475677e9aa9e3050e2765694dfc81f56e880b96e7160c980dd98edd3dfffffffffffffffff"
     }
 }
-},{}],88:[function(require,module,exports){
+},{}],65:[function(require,module,exports){
 'use strict';
 
 var elliptic = exports;
@@ -12481,7 +10691,7 @@ elliptic.curves = require('./elliptic/curves');
 elliptic.ec = require('./elliptic/ec');
 elliptic.eddsa = require('./elliptic/eddsa');
 
-},{"../package.json":103,"./elliptic/curve":91,"./elliptic/curves":94,"./elliptic/ec":95,"./elliptic/eddsa":98,"./elliptic/utils":102,"brorand":40}],89:[function(require,module,exports){
+},{"../package.json":80,"./elliptic/curve":68,"./elliptic/curves":71,"./elliptic/ec":72,"./elliptic/eddsa":75,"./elliptic/utils":79,"brorand":17}],66:[function(require,module,exports){
 'use strict';
 
 var BN = require('bn.js');
@@ -12858,7 +11068,7 @@ BasePoint.prototype.dblp = function dblp(k) {
   return r;
 };
 
-},{"../../elliptic":88,"bn.js":39}],90:[function(require,module,exports){
+},{"../../elliptic":65,"bn.js":16}],67:[function(require,module,exports){
 'use strict';
 
 var curve = require('../curve');
@@ -13293,7 +11503,7 @@ Point.prototype.eqXToP = function eqXToP(x) {
 Point.prototype.toP = Point.prototype.normalize;
 Point.prototype.mixedAdd = Point.prototype.add;
 
-},{"../../elliptic":88,"../curve":91,"bn.js":39,"inherits":115}],91:[function(require,module,exports){
+},{"../../elliptic":65,"../curve":68,"bn.js":16,"inherits":92}],68:[function(require,module,exports){
 'use strict';
 
 var curve = exports;
@@ -13303,7 +11513,7 @@ curve.short = require('./short');
 curve.mont = require('./mont');
 curve.edwards = require('./edwards');
 
-},{"./base":89,"./edwards":90,"./mont":92,"./short":93}],92:[function(require,module,exports){
+},{"./base":66,"./edwards":67,"./mont":69,"./short":70}],69:[function(require,module,exports){
 'use strict';
 
 var curve = require('../curve');
@@ -13485,7 +11695,7 @@ Point.prototype.getX = function getX() {
   return this.x.fromRed();
 };
 
-},{"../../elliptic":88,"../curve":91,"bn.js":39,"inherits":115}],93:[function(require,module,exports){
+},{"../../elliptic":65,"../curve":68,"bn.js":16,"inherits":92}],70:[function(require,module,exports){
 'use strict';
 
 var curve = require('../curve');
@@ -14425,7 +12635,7 @@ JPoint.prototype.isInfinity = function isInfinity() {
   return this.z.cmpn(0) === 0;
 };
 
-},{"../../elliptic":88,"../curve":91,"bn.js":39,"inherits":115}],94:[function(require,module,exports){
+},{"../../elliptic":65,"../curve":68,"bn.js":16,"inherits":92}],71:[function(require,module,exports){
 'use strict';
 
 var curves = exports;
@@ -14632,7 +12842,7 @@ defineCurve('secp256k1', {
   ]
 });
 
-},{"../elliptic":88,"./precomputed/secp256k1":101,"hash.js":106}],95:[function(require,module,exports){
+},{"../elliptic":65,"./precomputed/secp256k1":78,"hash.js":83}],72:[function(require,module,exports){
 'use strict';
 
 var BN = require('bn.js');
@@ -14874,7 +13084,7 @@ EC.prototype.getKeyRecoveryParam = function(e, signature, Q, enc) {
   throw new Error('Unable to find valid recovery factor');
 };
 
-},{"../../elliptic":88,"./key":96,"./signature":97,"bn.js":39,"hmac-drbg":112}],96:[function(require,module,exports){
+},{"../../elliptic":65,"./key":73,"./signature":74,"bn.js":16,"hmac-drbg":89}],73:[function(require,module,exports){
 'use strict';
 
 var BN = require('bn.js');
@@ -14995,7 +13205,7 @@ KeyPair.prototype.inspect = function inspect() {
          ' pub: ' + (this.pub && this.pub.inspect()) + ' >';
 };
 
-},{"../../elliptic":88,"bn.js":39}],97:[function(require,module,exports){
+},{"../../elliptic":65,"bn.js":16}],74:[function(require,module,exports){
 'use strict';
 
 var BN = require('bn.js');
@@ -15132,7 +13342,7 @@ Signature.prototype.toDER = function toDER(enc) {
   return utils.encode(res, enc);
 };
 
-},{"../../elliptic":88,"bn.js":39}],98:[function(require,module,exports){
+},{"../../elliptic":65,"bn.js":16}],75:[function(require,module,exports){
 'use strict';
 
 var hash = require('hash.js');
@@ -15252,7 +13462,7 @@ EDDSA.prototype.isPoint = function isPoint(val) {
   return val instanceof this.pointClass;
 };
 
-},{"../../elliptic":88,"./key":99,"./signature":100,"hash.js":106}],99:[function(require,module,exports){
+},{"../../elliptic":65,"./key":76,"./signature":77,"hash.js":83}],76:[function(require,module,exports){
 'use strict';
 
 var elliptic = require('../../elliptic');
@@ -15350,7 +13560,7 @@ KeyPair.prototype.getPublic = function getPublic(enc) {
 
 module.exports = KeyPair;
 
-},{"../../elliptic":88}],100:[function(require,module,exports){
+},{"../../elliptic":65}],77:[function(require,module,exports){
 'use strict';
 
 var BN = require('bn.js');
@@ -15418,7 +13628,7 @@ Signature.prototype.toHex = function toHex() {
 
 module.exports = Signature;
 
-},{"../../elliptic":88,"bn.js":39}],101:[function(require,module,exports){
+},{"../../elliptic":65,"bn.js":16}],78:[function(require,module,exports){
 module.exports = {
   doubles: {
     step: 4,
@@ -16200,7 +14410,7 @@ module.exports = {
   }
 };
 
-},{}],102:[function(require,module,exports){
+},{}],79:[function(require,module,exports){
 'use strict';
 
 var utils = exports;
@@ -16322,7 +14532,7 @@ function intFromLE(bytes) {
 utils.intFromLE = intFromLE;
 
 
-},{"bn.js":39,"minimalistic-assert":119,"minimalistic-crypto-utils":120}],103:[function(require,module,exports){
+},{"bn.js":16,"minimalistic-assert":96,"minimalistic-crypto-utils":97}],80:[function(require,module,exports){
 module.exports={
   "_args": [
     [
@@ -16335,7 +14545,7 @@ module.exports={
         "spec": ">=6.0.0 <7.0.0",
         "type": "range"
       },
-      "/usr/lib/node_modules/browserify/node_modules/browserify-sign"
+      "C:\\Users\\Kiran\\AppData\\Roaming\\npm\\node_modules\\browserify\\node_modules\\browserify-sign"
     ]
   ],
   "_from": "elliptic@>=6.0.0 <7.0.0",
@@ -16370,7 +14580,7 @@ module.exports={
   "_shasum": "cac9af8762c85836187003c8dfe193e5e2eae5df",
   "_shrinkwrap": null,
   "_spec": "elliptic@^6.0.0",
-  "_where": "/usr/lib/node_modules/browserify/node_modules/browserify-sign",
+  "_where": "C:\\Users\\Kiran\\AppData\\Roaming\\npm\\node_modules\\browserify\\node_modules\\browserify-sign",
   "author": {
     "name": "Fedor Indutny",
     "email": "fedor@indutny.com"
@@ -16446,7 +14656,7 @@ module.exports={
   "version": "6.4.0"
 }
 
-},{}],104:[function(require,module,exports){
+},{}],81:[function(require,module,exports){
 // Copyright Joyent, Inc. and other Node contributors.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a
@@ -16750,7 +14960,7 @@ function isUndefined(arg) {
   return arg === void 0;
 }
 
-},{}],105:[function(require,module,exports){
+},{}],82:[function(require,module,exports){
 (function (Buffer){
 var md5 = require('create-hash/md5')
 module.exports = EVP_BytesToKey
@@ -16822,7 +15032,7 @@ function EVP_BytesToKey (password, salt, keyLen, ivLen) {
 }
 
 }).call(this,require("buffer").Buffer)
-},{"buffer":69,"create-hash/md5":75}],106:[function(require,module,exports){
+},{"buffer":46,"create-hash/md5":52}],83:[function(require,module,exports){
 var hash = exports;
 
 hash.utils = require('./hash/utils');
@@ -16839,7 +15049,7 @@ hash.sha384 = hash.sha.sha384;
 hash.sha512 = hash.sha.sha512;
 hash.ripemd160 = hash.ripemd.ripemd160;
 
-},{"./hash/common":107,"./hash/hmac":108,"./hash/ripemd":109,"./hash/sha":110,"./hash/utils":111}],107:[function(require,module,exports){
+},{"./hash/common":84,"./hash/hmac":85,"./hash/ripemd":86,"./hash/sha":87,"./hash/utils":88}],84:[function(require,module,exports){
 var hash = require('../hash');
 var utils = hash.utils;
 var assert = utils.assert;
@@ -16932,7 +15142,7 @@ BlockHash.prototype._pad = function pad() {
   return res;
 };
 
-},{"../hash":106}],108:[function(require,module,exports){
+},{"../hash":83}],85:[function(require,module,exports){
 var hmac = exports;
 
 var hash = require('../hash');
@@ -16982,7 +15192,7 @@ Hmac.prototype.digest = function digest(enc) {
   return this.outer.digest(enc);
 };
 
-},{"../hash":106}],109:[function(require,module,exports){
+},{"../hash":83}],86:[function(require,module,exports){
 var hash = require('../hash');
 var utils = hash.utils;
 
@@ -17128,7 +15338,7 @@ var sh = [
   8, 5, 12, 9, 12, 5, 14, 6, 8, 13, 6, 5, 15, 13, 11, 11
 ];
 
-},{"../hash":106}],110:[function(require,module,exports){
+},{"../hash":83}],87:[function(require,module,exports){
 var hash = require('../hash');
 var utils = hash.utils;
 var assert = utils.assert;
@@ -17694,7 +15904,7 @@ function g1_512_lo(xh, xl) {
   return r;
 }
 
-},{"../hash":106}],111:[function(require,module,exports){
+},{"../hash":83}],88:[function(require,module,exports){
 var utils = exports;
 var inherits = require('inherits');
 
@@ -17953,7 +16163,7 @@ function shr64_lo(ah, al, num) {
 };
 exports.shr64_lo = shr64_lo;
 
-},{"inherits":115}],112:[function(require,module,exports){
+},{"inherits":92}],89:[function(require,module,exports){
 'use strict';
 
 var hash = require('hash.js');
@@ -18068,7 +16278,7 @@ HmacDRBG.prototype.generate = function generate(len, enc, add, addEnc) {
   return utils.encode(res, enc);
 };
 
-},{"hash.js":106,"minimalistic-assert":119,"minimalistic-crypto-utils":120}],113:[function(require,module,exports){
+},{"hash.js":83,"minimalistic-assert":96,"minimalistic-crypto-utils":97}],90:[function(require,module,exports){
 exports.read = function (buffer, offset, isLE, mLen, nBytes) {
   var e, m
   var eLen = nBytes * 8 - mLen - 1
@@ -18154,7 +16364,7 @@ exports.write = function (buffer, value, offset, isLE, mLen, nBytes) {
   buffer[offset + i - d] |= s * 128
 }
 
-},{}],114:[function(require,module,exports){
+},{}],91:[function(require,module,exports){
 
 var indexOf = [].indexOf;
 
@@ -18165,7 +16375,7 @@ module.exports = function(arr, obj){
   }
   return -1;
 };
-},{}],115:[function(require,module,exports){
+},{}],92:[function(require,module,exports){
 if (typeof Object.create === 'function') {
   // implementation from standard node.js 'util' module
   module.exports = function inherits(ctor, superCtor) {
@@ -18190,7 +16400,7 @@ if (typeof Object.create === 'function') {
   }
 }
 
-},{}],116:[function(require,module,exports){
+},{}],93:[function(require,module,exports){
 /*!
  * Determine if an object is a Buffer
  *
@@ -18213,14 +16423,14 @@ function isSlowBuffer (obj) {
   return typeof obj.readFloatLE === 'function' && typeof obj.slice === 'function' && isBuffer(obj.slice(0, 0))
 }
 
-},{}],117:[function(require,module,exports){
+},{}],94:[function(require,module,exports){
 var toString = {}.toString;
 
 module.exports = Array.isArray || function (arr) {
   return toString.call(arr) == '[object Array]';
 };
 
-},{}],118:[function(require,module,exports){
+},{}],95:[function(require,module,exports){
 var bn = require('bn.js');
 var brorand = require('brorand');
 
@@ -18335,7 +16545,7 @@ MillerRabin.prototype.getDivisor = function getDivisor(n, k) {
   return false;
 };
 
-},{"bn.js":39,"brorand":40}],119:[function(require,module,exports){
+},{"bn.js":16,"brorand":17}],96:[function(require,module,exports){
 module.exports = assert;
 
 function assert(val, msg) {
@@ -18348,7 +16558,7 @@ assert.equal = function assertEqual(l, r, msg) {
     throw new Error(msg || ('Assertion failed: ' + l + ' != ' + r));
 };
 
-},{}],120:[function(require,module,exports){
+},{}],97:[function(require,module,exports){
 'use strict';
 
 var utils = exports;
@@ -18408,7 +16618,7 @@ utils.encode = function encode(arr, enc) {
     return arr;
 };
 
-},{}],121:[function(require,module,exports){
+},{}],98:[function(require,module,exports){
 module.exports={"2.16.840.1.101.3.4.1.1": "aes-128-ecb",
 "2.16.840.1.101.3.4.1.2": "aes-128-cbc",
 "2.16.840.1.101.3.4.1.3": "aes-128-ofb",
@@ -18422,7 +16632,7 @@ module.exports={"2.16.840.1.101.3.4.1.1": "aes-128-ecb",
 "2.16.840.1.101.3.4.1.43": "aes-256-ofb",
 "2.16.840.1.101.3.4.1.44": "aes-256-cfb"
 }
-},{}],122:[function(require,module,exports){
+},{}],99:[function(require,module,exports){
 // from https://github.com/indutny/self-signed/blob/gh-pages/lib/asn1.js
 // Fedor, you are amazing.
 'use strict'
@@ -18546,7 +16756,7 @@ exports.signature = asn1.define('signature', function () {
   )
 })
 
-},{"./certificate":123,"asn1.js":24}],123:[function(require,module,exports){
+},{"./certificate":100,"asn1.js":1}],100:[function(require,module,exports){
 // from https://github.com/Rantanen/node-dtls/blob/25a7dc861bda38cfeac93a723500eea4f0ac2e86/Certificate.js
 // thanks to @Rantanen
 
@@ -18636,7 +16846,7 @@ var X509Certificate = asn.define('X509Certificate', function () {
 
 module.exports = X509Certificate
 
-},{"asn1.js":24}],124:[function(require,module,exports){
+},{"asn1.js":1}],101:[function(require,module,exports){
 (function (Buffer){
 // adapted from https://github.com/apatil/pemstrip
 var findProc = /Proc-Type: 4,ENCRYPTED\n\r?DEK-Info: AES-((?:128)|(?:192)|(?:256))-CBC,([0-9A-H]+)\n\r?\n\r?([0-9A-z\n\r\+\/\=]+)\n\r?/m
@@ -18670,7 +16880,7 @@ module.exports = function (okey, password) {
 }
 
 }).call(this,require("buffer").Buffer)
-},{"browserify-aes":44,"buffer":69,"evp_bytestokey":105}],125:[function(require,module,exports){
+},{"browserify-aes":21,"buffer":46,"evp_bytestokey":82}],102:[function(require,module,exports){
 (function (Buffer){
 var asn1 = require('./asn1')
 var aesid = require('./aesid.json')
@@ -18780,7 +16990,7 @@ function decrypt (data, password) {
 }
 
 }).call(this,require("buffer").Buffer)
-},{"./aesid.json":121,"./asn1":122,"./fixProc":124,"browserify-aes":44,"buffer":69,"pbkdf2":126}],126:[function(require,module,exports){
+},{"./aesid.json":98,"./asn1":99,"./fixProc":101,"browserify-aes":21,"buffer":46,"pbkdf2":103}],103:[function(require,module,exports){
 (function (process,Buffer){
 var createHmac = require('create-hmac')
 var checkParameters = require('./precondition')
@@ -18852,7 +17062,7 @@ exports.pbkdf2Sync = function (password, salt, iterations, keylen, digest) {
 }
 
 }).call(this,require('_process'),require("buffer").Buffer)
-},{"./precondition":127,"_process":129,"buffer":69,"create-hmac":76}],127:[function(require,module,exports){
+},{"./precondition":104,"_process":106,"buffer":46,"create-hmac":53}],104:[function(require,module,exports){
 var MAX_ALLOC = Math.pow(2, 30) - 1 // default in iojs
 module.exports = function (iterations, keylen) {
   if (typeof iterations !== 'number') {
@@ -18872,7 +17082,7 @@ module.exports = function (iterations, keylen) {
   }
 }
 
-},{}],128:[function(require,module,exports){
+},{}],105:[function(require,module,exports){
 (function (process){
 'use strict';
 
@@ -18919,7 +17129,7 @@ function nextTick(fn, arg1, arg2, arg3) {
 }
 
 }).call(this,require('_process'))
-},{"_process":129}],129:[function(require,module,exports){
+},{"_process":106}],106:[function(require,module,exports){
 // shim for using process in browser
 var process = module.exports = {};
 
@@ -19101,7 +17311,7 @@ process.chdir = function (dir) {
 };
 process.umask = function() { return 0; };
 
-},{}],130:[function(require,module,exports){
+},{}],107:[function(require,module,exports){
 exports.publicEncrypt = require('./publicEncrypt');
 exports.privateDecrypt = require('./privateDecrypt');
 
@@ -19112,7 +17322,7 @@ exports.privateEncrypt = function privateEncrypt(key, buf) {
 exports.publicDecrypt = function publicDecrypt(key, buf) {
   return exports.privateDecrypt(key, buf, true);
 };
-},{"./privateDecrypt":132,"./publicEncrypt":133}],131:[function(require,module,exports){
+},{"./privateDecrypt":109,"./publicEncrypt":110}],108:[function(require,module,exports){
 (function (Buffer){
 var createHash = require('create-hash');
 module.exports = function (seed, len) {
@@ -19131,7 +17341,7 @@ function i2ops(c) {
   return out;
 }
 }).call(this,require("buffer").Buffer)
-},{"buffer":69,"create-hash":73}],132:[function(require,module,exports){
+},{"buffer":46,"create-hash":50}],109:[function(require,module,exports){
 (function (Buffer){
 var parseKeys = require('parse-asn1');
 var mgf = require('./mgf');
@@ -19242,7 +17452,7 @@ function compare(a, b){
   return dif;
 }
 }).call(this,require("buffer").Buffer)
-},{"./mgf":131,"./withPublic":134,"./xor":135,"bn.js":39,"browserify-rsa":60,"buffer":69,"create-hash":73,"parse-asn1":125}],133:[function(require,module,exports){
+},{"./mgf":108,"./withPublic":111,"./xor":112,"bn.js":16,"browserify-rsa":37,"buffer":46,"create-hash":50,"parse-asn1":102}],110:[function(require,module,exports){
 (function (Buffer){
 var parseKeys = require('parse-asn1');
 var randomBytes = require('randombytes');
@@ -19340,7 +17550,7 @@ function nonZero(len, crypto) {
   return out;
 }
 }).call(this,require("buffer").Buffer)
-},{"./mgf":131,"./withPublic":134,"./xor":135,"bn.js":39,"browserify-rsa":60,"buffer":69,"create-hash":73,"parse-asn1":125,"randombytes":136}],134:[function(require,module,exports){
+},{"./mgf":108,"./withPublic":111,"./xor":112,"bn.js":16,"browserify-rsa":37,"buffer":46,"create-hash":50,"parse-asn1":102,"randombytes":113}],111:[function(require,module,exports){
 (function (Buffer){
 var bn = require('bn.js');
 function withPublic(paddedMsg, key) {
@@ -19353,7 +17563,7 @@ function withPublic(paddedMsg, key) {
 
 module.exports = withPublic;
 }).call(this,require("buffer").Buffer)
-},{"bn.js":39,"buffer":69}],135:[function(require,module,exports){
+},{"bn.js":16,"buffer":46}],112:[function(require,module,exports){
 module.exports = function xor(a, b) {
   var len = a.length;
   var i = -1;
@@ -19362,7 +17572,7 @@ module.exports = function xor(a, b) {
   }
   return a
 };
-},{}],136:[function(require,module,exports){
+},{}],113:[function(require,module,exports){
 (function (process,global,Buffer){
 'use strict'
 
@@ -19402,10 +17612,10 @@ function randomBytes (size, cb) {
 }
 
 }).call(this,require('_process'),typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {},require("buffer").Buffer)
-},{"_process":129,"buffer":69}],137:[function(require,module,exports){
-module.exports = require('./lib/_stream_duplex.js');
+},{"_process":106,"buffer":46}],114:[function(require,module,exports){
+module.exports = require("./lib/_stream_duplex.js")
 
-},{"./lib/_stream_duplex.js":138}],138:[function(require,module,exports){
+},{"./lib/_stream_duplex.js":115}],115:[function(require,module,exports){
 // a duplex stream is just a stream that is both readable and writable.
 // Since JS doesn't have multiple prototypal inheritance, this class
 // prototypally inherits from Readable, and then parasitically from
@@ -19481,7 +17691,7 @@ function forEach(xs, f) {
     f(xs[i], i);
   }
 }
-},{"./_stream_readable":140,"./_stream_writable":142,"core-util-is":71,"inherits":115,"process-nextick-args":128}],139:[function(require,module,exports){
+},{"./_stream_readable":117,"./_stream_writable":119,"core-util-is":48,"inherits":92,"process-nextick-args":105}],116:[function(require,module,exports){
 // a passthrough stream.
 // basically just the most minimal sort of Transform stream.
 // Every written chunk gets output as-is.
@@ -19508,7 +17718,7 @@ function PassThrough(options) {
 PassThrough.prototype._transform = function (chunk, encoding, cb) {
   cb(null, chunk);
 };
-},{"./_stream_transform":141,"core-util-is":71,"inherits":115}],140:[function(require,module,exports){
+},{"./_stream_transform":118,"core-util-is":48,"inherits":92}],117:[function(require,module,exports){
 (function (process){
 'use strict';
 
@@ -19571,8 +17781,6 @@ var BufferList = require('./internal/streams/BufferList');
 var StringDecoder;
 
 util.inherits(Readable, Stream);
-
-var kProxyEvents = ['error', 'close', 'destroy', 'pause', 'resume'];
 
 function prependListener(emitter, event, fn) {
   // Sadly this is not cacheable as some libraries bundle their own
@@ -20298,9 +18506,10 @@ Readable.prototype.wrap = function (stream) {
   }
 
   // proxy certain important events.
-  for (var n = 0; n < kProxyEvents.length; n++) {
-    stream.on(kProxyEvents[n], self.emit.bind(self, kProxyEvents[n]));
-  }
+  var events = ['error', 'close', 'destroy', 'pause', 'resume'];
+  forEach(events, function (ev) {
+    stream.on(ev, self.emit.bind(self, ev));
+  });
 
   // when we try to consume some more bytes, simply unpause the
   // underlying stream.
@@ -20453,7 +18662,7 @@ function indexOf(xs, x) {
   return -1;
 }
 }).call(this,require('_process'))
-},{"./_stream_duplex":138,"./internal/streams/BufferList":143,"_process":129,"buffer":69,"buffer-shims":67,"core-util-is":71,"events":104,"inherits":115,"isarray":117,"process-nextick-args":128,"string_decoder/":144,"util":41}],141:[function(require,module,exports){
+},{"./_stream_duplex":115,"./internal/streams/BufferList":120,"_process":106,"buffer":46,"buffer-shims":44,"core-util-is":48,"events":81,"inherits":92,"isarray":94,"process-nextick-args":105,"string_decoder/":135,"util":18}],118:[function(require,module,exports){
 // a transform stream is a readable/writable stream where you do
 // something with the data.  Sometimes it's called a "filter",
 // but that's not a great name for it, since that implies a thing where
@@ -20636,7 +18845,7 @@ function done(stream, er, data) {
 
   return stream.push(null);
 }
-},{"./_stream_duplex":138,"core-util-is":71,"inherits":115}],142:[function(require,module,exports){
+},{"./_stream_duplex":115,"core-util-is":48,"inherits":92}],119:[function(require,module,exports){
 (function (process){
 // A bit simpler than readable streams.
 // Implement an async ._write(chunk, encoding, cb), and it'll handle all
@@ -21190,7 +19399,7 @@ function CorkedRequest(state) {
   };
 }
 }).call(this,require('_process'))
-},{"./_stream_duplex":138,"_process":129,"buffer":69,"buffer-shims":67,"core-util-is":71,"events":104,"inherits":115,"process-nextick-args":128,"util-deprecate":160}],143:[function(require,module,exports){
+},{"./_stream_duplex":115,"_process":106,"buffer":46,"buffer-shims":44,"core-util-is":48,"events":81,"inherits":92,"process-nextick-args":105,"util-deprecate":136}],120:[function(require,module,exports){
 'use strict';
 
 var Buffer = require('buffer').Buffer;
@@ -21255,299 +19464,36 @@ BufferList.prototype.concat = function (n) {
   }
   return ret;
 };
-},{"buffer":69,"buffer-shims":67}],144:[function(require,module,exports){
-'use strict';
+},{"buffer":46,"buffer-shims":44}],121:[function(require,module,exports){
+module.exports = require("./lib/_stream_passthrough.js")
 
-var Buffer = require('buffer').Buffer;
-var bufferShim = require('buffer-shims');
-
-var isEncoding = Buffer.isEncoding || function (encoding) {
-  encoding = '' + encoding;
-  switch (encoding && encoding.toLowerCase()) {
-    case 'hex':case 'utf8':case 'utf-8':case 'ascii':case 'binary':case 'base64':case 'ucs2':case 'ucs-2':case 'utf16le':case 'utf-16le':case 'raw':
-      return true;
-    default:
-      return false;
-  }
-};
-
-function _normalizeEncoding(enc) {
-  if (!enc) return 'utf8';
-  var retried;
-  while (true) {
-    switch (enc) {
-      case 'utf8':
-      case 'utf-8':
-        return 'utf8';
-      case 'ucs2':
-      case 'ucs-2':
-      case 'utf16le':
-      case 'utf-16le':
-        return 'utf16le';
-      case 'latin1':
-      case 'binary':
-        return 'latin1';
-      case 'base64':
-      case 'ascii':
-      case 'hex':
-        return enc;
-      default:
-        if (retried) return; // undefined
-        enc = ('' + enc).toLowerCase();
-        retried = true;
-    }
-  }
-};
-
-// Do not cache `Buffer.isEncoding` when checking encoding names as some
-// modules monkey-patch it to support additional encodings
-function normalizeEncoding(enc) {
-  var nenc = _normalizeEncoding(enc);
-  if (typeof nenc !== 'string' && (Buffer.isEncoding === isEncoding || !isEncoding(enc))) throw new Error('Unknown encoding: ' + enc);
-  return nenc || enc;
-}
-
-// StringDecoder provides an interface for efficiently splitting a series of
-// buffers into a series of JS strings without breaking apart multi-byte
-// characters.
-exports.StringDecoder = StringDecoder;
-function StringDecoder(encoding) {
-  this.encoding = normalizeEncoding(encoding);
-  var nb;
-  switch (this.encoding) {
-    case 'utf16le':
-      this.text = utf16Text;
-      this.end = utf16End;
-      nb = 4;
-      break;
-    case 'utf8':
-      this.fillLast = utf8FillLast;
-      nb = 4;
-      break;
-    case 'base64':
-      this.text = base64Text;
-      this.end = base64End;
-      nb = 3;
-      break;
-    default:
-      this.write = simpleWrite;
-      this.end = simpleEnd;
-      return;
-  }
-  this.lastNeed = 0;
-  this.lastTotal = 0;
-  this.lastChar = bufferShim.allocUnsafe(nb);
-}
-
-StringDecoder.prototype.write = function (buf) {
-  if (buf.length === 0) return '';
-  var r;
-  var i;
-  if (this.lastNeed) {
-    r = this.fillLast(buf);
-    if (r === undefined) return '';
-    i = this.lastNeed;
-    this.lastNeed = 0;
-  } else {
-    i = 0;
-  }
-  if (i < buf.length) return r ? r + this.text(buf, i) : this.text(buf, i);
-  return r || '';
-};
-
-StringDecoder.prototype.end = utf8End;
-
-// Returns only complete characters in a Buffer
-StringDecoder.prototype.text = utf8Text;
-
-// Attempts to complete a partial non-UTF-8 character using bytes from a Buffer
-StringDecoder.prototype.fillLast = function (buf) {
-  if (this.lastNeed <= buf.length) {
-    buf.copy(this.lastChar, this.lastTotal - this.lastNeed, 0, this.lastNeed);
-    return this.lastChar.toString(this.encoding, 0, this.lastTotal);
-  }
-  buf.copy(this.lastChar, this.lastTotal - this.lastNeed, 0, buf.length);
-  this.lastNeed -= buf.length;
-};
-
-// Checks the type of a UTF-8 byte, whether it's ASCII, a leading byte, or a
-// continuation byte.
-function utf8CheckByte(byte) {
-  if (byte <= 0x7F) return 0;else if (byte >> 5 === 0x06) return 2;else if (byte >> 4 === 0x0E) return 3;else if (byte >> 3 === 0x1E) return 4;
-  return -1;
-}
-
-// Checks at most 3 bytes at the end of a Buffer in order to detect an
-// incomplete multi-byte UTF-8 character. The total number of bytes (2, 3, or 4)
-// needed to complete the UTF-8 character (if applicable) are returned.
-function utf8CheckIncomplete(self, buf, i) {
-  var j = buf.length - 1;
-  if (j < i) return 0;
-  var nb = utf8CheckByte(buf[j]);
-  if (nb >= 0) {
-    if (nb > 0) self.lastNeed = nb - 1;
-    return nb;
-  }
-  if (--j < i) return 0;
-  nb = utf8CheckByte(buf[j]);
-  if (nb >= 0) {
-    if (nb > 0) self.lastNeed = nb - 2;
-    return nb;
-  }
-  if (--j < i) return 0;
-  nb = utf8CheckByte(buf[j]);
-  if (nb >= 0) {
-    if (nb > 0) {
-      if (nb === 2) nb = 0;else self.lastNeed = nb - 3;
-    }
-    return nb;
-  }
-  return 0;
-}
-
-// Validates as many continuation bytes for a multi-byte UTF-8 character as
-// needed or are available. If we see a non-continuation byte where we expect
-// one, we "replace" the validated continuation bytes we've seen so far with
-// UTF-8 replacement characters ('\ufffd'), to match v8's UTF-8 decoding
-// behavior. The continuation byte check is included three times in the case
-// where all of the continuation bytes for a character exist in the same buffer.
-// It is also done this way as a slight performance increase instead of using a
-// loop.
-function utf8CheckExtraBytes(self, buf, p) {
-  if ((buf[0] & 0xC0) !== 0x80) {
-    self.lastNeed = 0;
-    return '\ufffd'.repeat(p);
-  }
-  if (self.lastNeed > 1 && buf.length > 1) {
-    if ((buf[1] & 0xC0) !== 0x80) {
-      self.lastNeed = 1;
-      return '\ufffd'.repeat(p + 1);
-    }
-    if (self.lastNeed > 2 && buf.length > 2) {
-      if ((buf[2] & 0xC0) !== 0x80) {
-        self.lastNeed = 2;
-        return '\ufffd'.repeat(p + 2);
-      }
-    }
-  }
-}
-
-// Attempts to complete a multi-byte UTF-8 character using bytes from a Buffer.
-function utf8FillLast(buf) {
-  var p = this.lastTotal - this.lastNeed;
-  var r = utf8CheckExtraBytes(this, buf, p);
-  if (r !== undefined) return r;
-  if (this.lastNeed <= buf.length) {
-    buf.copy(this.lastChar, p, 0, this.lastNeed);
-    return this.lastChar.toString(this.encoding, 0, this.lastTotal);
-  }
-  buf.copy(this.lastChar, p, 0, buf.length);
-  this.lastNeed -= buf.length;
-}
-
-// Returns all complete UTF-8 characters in a Buffer. If the Buffer ended on a
-// partial character, the character's bytes are buffered until the required
-// number of bytes are available.
-function utf8Text(buf, i) {
-  var total = utf8CheckIncomplete(this, buf, i);
-  if (!this.lastNeed) return buf.toString('utf8', i);
-  this.lastTotal = total;
-  var end = buf.length - (total - this.lastNeed);
-  buf.copy(this.lastChar, 0, end);
-  return buf.toString('utf8', i, end);
-}
-
-// For UTF-8, a replacement character for each buffered byte of a (partial)
-// character needs to be added to the output.
-function utf8End(buf) {
-  var r = buf && buf.length ? this.write(buf) : '';
-  if (this.lastNeed) return r + '\ufffd'.repeat(this.lastTotal - this.lastNeed);
-  return r;
-}
-
-// UTF-16LE typically needs two bytes per character, but even if we have an even
-// number of bytes available, we need to check if we end on a leading/high
-// surrogate. In that case, we need to wait for the next two bytes in order to
-// decode the last character properly.
-function utf16Text(buf, i) {
-  if ((buf.length - i) % 2 === 0) {
-    var r = buf.toString('utf16le', i);
-    if (r) {
-      var c = r.charCodeAt(r.length - 1);
-      if (c >= 0xD800 && c <= 0xDBFF) {
-        this.lastNeed = 2;
-        this.lastTotal = 4;
-        this.lastChar[0] = buf[buf.length - 2];
-        this.lastChar[1] = buf[buf.length - 1];
-        return r.slice(0, -1);
-      }
-    }
-    return r;
-  }
-  this.lastNeed = 1;
-  this.lastTotal = 2;
-  this.lastChar[0] = buf[buf.length - 1];
-  return buf.toString('utf16le', i, buf.length - 1);
-}
-
-// For UTF-16LE we do not explicitly append special replacement characters if we
-// end on a partial character, we simply let v8 handle that.
-function utf16End(buf) {
-  var r = buf && buf.length ? this.write(buf) : '';
-  if (this.lastNeed) {
-    var end = this.lastTotal - this.lastNeed;
-    return r + this.lastChar.toString('utf16le', 0, end);
-  }
-  return r;
-}
-
-function base64Text(buf, i) {
-  var n = (buf.length - i) % 3;
-  if (n === 0) return buf.toString('base64', i);
-  this.lastNeed = 3 - n;
-  this.lastTotal = 3;
-  if (n === 1) {
-    this.lastChar[0] = buf[buf.length - 1];
-  } else {
-    this.lastChar[0] = buf[buf.length - 2];
-    this.lastChar[1] = buf[buf.length - 1];
-  }
-  return buf.toString('base64', i, buf.length - n);
-}
-
-function base64End(buf) {
-  var r = buf && buf.length ? this.write(buf) : '';
-  if (this.lastNeed) return r + this.lastChar.toString('base64', 0, 3 - this.lastNeed);
-  return r;
-}
-
-// Pass bytes on through for single-byte encodings (e.g. ascii, latin1, hex)
-function simpleWrite(buf) {
-  return buf.toString(this.encoding);
-}
-
-function simpleEnd(buf) {
-  return buf && buf.length ? this.write(buf) : '';
-}
-},{"buffer":69,"buffer-shims":67}],145:[function(require,module,exports){
-module.exports = require('./readable').PassThrough
-
-},{"./readable":146}],146:[function(require,module,exports){
+},{"./lib/_stream_passthrough.js":116}],122:[function(require,module,exports){
+(function (process){
+var Stream = (function (){
+  try {
+    return require('st' + 'ream'); // hack to fix a circular dependency issue when used with browserify
+  } catch(_){}
+}());
 exports = module.exports = require('./lib/_stream_readable.js');
-exports.Stream = exports;
+exports.Stream = Stream || exports;
 exports.Readable = exports;
 exports.Writable = require('./lib/_stream_writable.js');
 exports.Duplex = require('./lib/_stream_duplex.js');
 exports.Transform = require('./lib/_stream_transform.js');
 exports.PassThrough = require('./lib/_stream_passthrough.js');
 
-},{"./lib/_stream_duplex.js":138,"./lib/_stream_passthrough.js":139,"./lib/_stream_readable.js":140,"./lib/_stream_transform.js":141,"./lib/_stream_writable.js":142}],147:[function(require,module,exports){
-module.exports = require('./readable').Transform
+if (!process.browser && process.env.READABLE_STREAM === 'disable' && Stream) {
+  module.exports = Stream;
+}
 
-},{"./readable":146}],148:[function(require,module,exports){
-module.exports = require('./lib/_stream_writable.js');
+}).call(this,require('_process'))
+},{"./lib/_stream_duplex.js":115,"./lib/_stream_passthrough.js":116,"./lib/_stream_readable.js":117,"./lib/_stream_transform.js":118,"./lib/_stream_writable.js":119,"_process":106}],123:[function(require,module,exports){
+module.exports = require("./lib/_stream_transform.js")
 
-},{"./lib/_stream_writable.js":142}],149:[function(require,module,exports){
+},{"./lib/_stream_transform.js":118}],124:[function(require,module,exports){
+module.exports = require("./lib/_stream_writable.js")
+
+},{"./lib/_stream_writable.js":119}],125:[function(require,module,exports){
 (function (Buffer){
 /*
 CryptoJS v3.1.2
@@ -21761,7 +19707,7 @@ function ripemd160 (message) {
 module.exports = ripemd160
 
 }).call(this,require("buffer").Buffer)
-},{"buffer":69}],150:[function(require,module,exports){
+},{"buffer":46}],126:[function(require,module,exports){
 (function (Buffer){
 // prototype class for hash functions
 function Hash (blockSize, finalSize) {
@@ -21834,7 +19780,7 @@ Hash.prototype._update = function () {
 module.exports = Hash
 
 }).call(this,require("buffer").Buffer)
-},{"buffer":69}],151:[function(require,module,exports){
+},{"buffer":46}],127:[function(require,module,exports){
 var exports = module.exports = function SHA (algorithm) {
   algorithm = algorithm.toLowerCase()
 
@@ -21851,7 +19797,7 @@ exports.sha256 = require('./sha256')
 exports.sha384 = require('./sha384')
 exports.sha512 = require('./sha512')
 
-},{"./sha":152,"./sha1":153,"./sha224":154,"./sha256":155,"./sha384":156,"./sha512":157}],152:[function(require,module,exports){
+},{"./sha":128,"./sha1":129,"./sha224":130,"./sha256":131,"./sha384":132,"./sha512":133}],128:[function(require,module,exports){
 (function (Buffer){
 /*
  * A JavaScript implementation of the Secure Hash Algorithm, SHA-0, as defined
@@ -21948,7 +19894,7 @@ Sha.prototype._hash = function () {
 module.exports = Sha
 
 }).call(this,require("buffer").Buffer)
-},{"./hash":150,"buffer":69,"inherits":115}],153:[function(require,module,exports){
+},{"./hash":126,"buffer":46,"inherits":92}],129:[function(require,module,exports){
 (function (Buffer){
 /*
  * A JavaScript implementation of the Secure Hash Algorithm, SHA-1, as defined
@@ -22050,7 +19996,7 @@ Sha1.prototype._hash = function () {
 module.exports = Sha1
 
 }).call(this,require("buffer").Buffer)
-},{"./hash":150,"buffer":69,"inherits":115}],154:[function(require,module,exports){
+},{"./hash":126,"buffer":46,"inherits":92}],130:[function(require,module,exports){
 (function (Buffer){
 /**
  * A JavaScript implementation of the Secure Hash Algorithm, SHA-256, as defined
@@ -22106,7 +20052,7 @@ Sha224.prototype._hash = function () {
 module.exports = Sha224
 
 }).call(this,require("buffer").Buffer)
-},{"./hash":150,"./sha256":155,"buffer":69,"inherits":115}],155:[function(require,module,exports){
+},{"./hash":126,"./sha256":131,"buffer":46,"inherits":92}],131:[function(require,module,exports){
 (function (Buffer){
 /**
  * A JavaScript implementation of the Secure Hash Algorithm, SHA-256, as defined
@@ -22244,7 +20190,7 @@ Sha256.prototype._hash = function () {
 module.exports = Sha256
 
 }).call(this,require("buffer").Buffer)
-},{"./hash":150,"buffer":69,"inherits":115}],156:[function(require,module,exports){
+},{"./hash":126,"buffer":46,"inherits":92}],132:[function(require,module,exports){
 (function (Buffer){
 var inherits = require('inherits')
 var SHA512 = require('./sha512')
@@ -22304,7 +20250,7 @@ Sha384.prototype._hash = function () {
 module.exports = Sha384
 
 }).call(this,require("buffer").Buffer)
-},{"./hash":150,"./sha512":157,"buffer":69,"inherits":115}],157:[function(require,module,exports){
+},{"./hash":126,"./sha512":133,"buffer":46,"inherits":92}],133:[function(require,module,exports){
 (function (Buffer){
 var inherits = require('inherits')
 var Hash = require('./hash')
@@ -22567,7 +20513,7 @@ Sha512.prototype._hash = function () {
 module.exports = Sha512
 
 }).call(this,require("buffer").Buffer)
-},{"./hash":150,"buffer":69,"inherits":115}],158:[function(require,module,exports){
+},{"./hash":126,"buffer":46,"inherits":92}],134:[function(require,module,exports){
 // Copyright Joyent, Inc. and other Node contributors.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a
@@ -22696,7 +20642,7 @@ Stream.prototype.pipe = function(dest, options) {
   return dest;
 };
 
-},{"events":104,"inherits":115,"readable-stream/duplex.js":137,"readable-stream/passthrough.js":145,"readable-stream/readable.js":146,"readable-stream/transform.js":147,"readable-stream/writable.js":148}],159:[function(require,module,exports){
+},{"events":81,"inherits":92,"readable-stream/duplex.js":114,"readable-stream/passthrough.js":121,"readable-stream/readable.js":122,"readable-stream/transform.js":123,"readable-stream/writable.js":124}],135:[function(require,module,exports){
 // Copyright Joyent, Inc. and other Node contributors.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a
@@ -22919,7 +20865,7 @@ function base64DetectIncompleteChar(buffer) {
   this.charLength = this.charReceived ? 3 : 0;
 }
 
-},{"buffer":69}],160:[function(require,module,exports){
+},{"buffer":46}],136:[function(require,module,exports){
 (function (global){
 
 /**
@@ -22990,7 +20936,7 @@ function config (name) {
 }
 
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{}],161:[function(require,module,exports){
+},{}],137:[function(require,module,exports){
 var indexOf = require('indexof');
 
 var Object_keys = function (obj) {
@@ -23130,4 +21076,1824 @@ exports.createContext = Script.createContext = function (context) {
     return copy;
 };
 
-},{"indexof":114}]},{},[10]);
+},{"indexof":91}],138:[function(require,module,exports){
+'use strict';
+
+var ClientGameState = require('./ClientGameState');
+var InputUpdate = require('../shared/InputUpdate');
+var ClientPlayer = require('./ClientPlayer');
+var OtherPlayer = require('./OtherPlayer');
+var ClientBullet = require('./ClientBullet');
+var ClientCollectible = require('./ClientCollectible');
+var KeyboardState = require('../lib/THREEx.KeyboardState');
+var MouseState = require('../lib/MouseState');
+var Vector2D = require('../lib/Vector2D');
+var Globals = require('../lib/Globals');
+var InputProcessing = require('../shared/InputProcessing');
+
+var prevTime = Date.now();
+var frameCount = 0;
+var frameRate = 0;
+
+var updateCount = 0;
+var updateAccumTime = 0;
+var timePerUpdate = 0;
+
+var drawCount = 0;
+var drawAccumTime = 0;
+var timePerDraw = 0;
+
+class Client {
+	constructor() {
+		this.gamestateReceived = false;		
+		this.socket = io();
+
+		this.socket.once('init', this.handleInitFromServer.bind(this));
+		this.socket.on('update', this.handleUpdateFromServer.bind(this));
+		
+		this.canvas = document.getElementById('canvas');
+		this.ctx = this.canvas.getContext('2d');
+		this.scaleCanvas();
+
+
+		if (this.gamestate === undefined) {
+			this.gamestate = null;
+		}
+		this.gameStateUpdates = [];
+		this.inputUpdates = [];
+		this.currentSequenceNumber = 0;
+		this.entityInterpolationOffset = 100;
+		
+		this.keyboard = new KeyboardState();
+		this.mouse = new MouseState();
+		this.prevIsRightButtonDown = false;
+		this.prevKeysPressed = {};
+		// for (let i=0; i<KEYBOARD_INPUTS.length; i++){
+		// 	this.prevKeysPressed[KEYBOARD_INPUTS[i]] = false;
+		// }
+
+		document.ondragstart = function(event) { return false };
+		
+		window.onresize = this.onWindowResize.bind(this);
+	}
+
+	scaleCanvas(){
+		this.canvas.width = window.innerWidth;
+		this.canvas.height = window.innerHeight;
+
+		let aspect = this.canvas.width / this.canvas.height;
+		if (aspect < Globals.DEFAULT_ASPECT){
+			this.scale = this.canvas.height / Globals.DEFAULT_HEIGHT;
+		}
+		else{
+			this.scale = this.canvas.width / Globals.DEFAULT_WIDTH;
+		}
+	}
+
+	run() {
+		this.prevTime = Date.now();
+		this.updateGameStateID = setInterval(this.updateGameState.bind(this), 15);
+		window.requestAnimationFrame(this.draw.bind(this));
+	}
+
+	handleInitFromServer(data) {
+		this.ID = data.clientID;
+		this.gameStateUpdates = [];
+		this.gameStateUpdates.push(data.gameStateUpdate);
+		this.currentSequenceNumber = data.gameStateUpdate.sequenceNumber;
+		this.gamestate = new ClientGameState(data.worldWidth, data.worldHeight, data.gameStateUpdate.player);
+		this.gamestateReceived = true;
+		this.run();
+	}
+
+	handleUpdateFromServer(gameStateUpdate) {
+		let currTime = Date.now();
+
+		this.gameStateUpdates.push(gameStateUpdate);
+		let discardIndex = this.getInterpolationIndex(currTime) - 1;
+		if (discardIndex >= 0) {
+			this.gameStateUpdates.splice(0, discardIndex + 1);
+		}
+
+		discardIndex = this.inputUpdates.findIndex(
+			function(inputUpdate) {
+				return inputUpdate.sequenceNumber === gameStateUpdate.sequenceNumber;
+			}
+		);
+
+		//if sequence number not found, then it must be associated with a discarded input.
+		//this means that a more recent server update has already been applied, so we can ignore the current server update.
+		if (discardIndex !== -1) { 
+			this.inputUpdates.splice(0, discardIndex + 1);
+			
+			//block MOVED from updateGameState() -- want to apply inputs to server update immediately, only once.
+			if (this.gameStateUpdates[this.gameStateUpdates.length-1].player === null){
+				this.gamestate=null;
+			}
+			else {
+				this.gamestate.setPlayerProperties(this.gameStateUpdates[this.gameStateUpdates.length-1].player);
+				for (let i = 0; i < this.inputUpdates.length; i++) {
+					InputProcessing.processInput(this.inputUpdates[i], this.gamestate.player, this.gamestate);
+				}
+			}
+			
+		}
+	}
+	
+	updateGameState() {
+		let currTime = Date.now();
+		let deltaTime = (currTime - this.prevTime) / 1000;
+		this.prevTime = currTime;
+
+		let inputUpdate = this.getInput(deltaTime);
+		this.inputUpdates.push(inputUpdate);
+		this.socket.emit('update', inputUpdate);
+
+		//Client prediction.
+		if (this.gamestate !== null){
+			InputProcessing.processInput(inputUpdate, this.gamestate.player, this.gamestate);
+		}
+		/*
+		else {
+			if (inputUpdate.isMouseLeftButtonDown || 'space' in inputUpdate.keysPressed) {
+				this.socket.emit('restart');
+			}
+		}
+		*/
+
+		updateAccumTime += Date.now() - currTime;
+		updateCount++;
+		if (updateCount >= 100) {
+			timePerUpdate = updateAccumTime / 100.0;
+			updateCount = 0;
+			updateAccumTime = 0;
+		}
+	}
+	
+	draw() {
+		let drawBeginTime = Date.now();
+
+		this.ctx.setTransform(1, 0, 0, 1, 0, 0);
+		this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+		
+		if (this.gamestate === null) {
+			if (this.gamestateReceived) {
+				this.ctx.fillStyle = "red";
+				this.ctx.font = '100px Arial';
+				let msg = "YOU DEAD";
+				this.ctx.fillText(msg, this.canvas.width/2 - this.ctx.measureText(msg).width/2, this.canvas.height/2);
+				/*
+				this.ctx.font = '32px Arial';
+				msg = "Press 'Space' or 'Left Mouse Button' to restart.";
+				this.ctx.fillText(msg, this.canvas.width/2 - this.ctx.measureText(msg).width/2, this.canvas.height - 40);
+				*/
+			}
+			window.requestAnimationFrame(this.draw.bind(this));
+			return;
+		}
+
+		let entities = this.performEntityInterpolation();
+		this.gamestate.draw(this.ctx, this.scale, entities.otherPlayers, entities.bullets, entities.collectibles);
+		
+		this.ctx.setTransform(this.scale, 0, 0, this.scale, 0, 0);
+		this.ctx.fillStyle = "purple";
+		this.ctx.font = '15px Arial';
+		this.ctx.fillText("[1]  Pleb Pistol", 20, this.canvas.height/this.scale - 70);
+		this.ctx.fillText("[2]  Flame Thrower", 20, this.canvas.height/this.scale - 50);
+		this.ctx.fillText("[3]  Volcano", 20, this.canvas.height/this.scale - 30);
+
+		frameCount++;
+		let currTime = Date.now();
+		if (currTime - prevTime >= 1000) {
+			frameRate = frameCount;
+			frameCount = 0;
+			prevTime = currTime;
+		}
+
+		this.ctx.fillStyle = "black";
+		this.ctx.fillText("Frame rate: " + frameRate, 20, 30);
+		this.ctx.fillText("Update time: " + timePerUpdate + "ms", 20, 50);
+		this.ctx.fillText("Draw time: " + timePerDraw + "ms", 20, 70);
+
+		drawAccumTime += Date.now() - drawBeginTime;
+		drawCount++;
+		if (drawCount >= 100) {
+			timePerDraw = drawAccumTime / 100.0;
+			drawCount = 0;
+			drawAccumTime = 0;
+		}
+
+		window.requestAnimationFrame(this.draw.bind(this));
+	}
+
+	getInput(deltaTime){
+		let keys = { numDirKeysPressed: 0 };
+		let dirKeys = "WASD";
+		for (let i = 0; i < dirKeys.length; i++) {
+			let currKey = dirKeys[i];
+			if (this.keyboard.pressed(currKey)) {
+				keys[currKey] = true;
+				keys.numDirKeysPressed++;
+			}
+		}
+		let numKeys = "123";
+		for (let i = 0; i < numKeys.length; i++) {
+			let currKey = numKeys[i];
+			if (this.keyboard.pressed(currKey)) {
+				keys[currKey] = true;
+			}
+		}
+		if (this.keyboard.pressed('F')) {
+			keys['F'] = true;
+		}
+		if (this.keyboard.pressed('space')) {
+			keys['space'] = true;
+		}
+
+		let keysClicked = {};  //get keysClicked
+		for (let i in this.prevKeysPressed){
+			if (this.prevKeysPressed[i] === true &&
+				keys[i] !== true)
+				keysClicked[i] = true;
+		}
+
+		this.prevKeysPressed = Globals.clone(keys);
+
+		let mouseDirection = (this.gamestate !== null) ?
+			new Vector2D(this.mouse.x, this.mouse.y).sub(new Vector2D(this.gamestate.canvasPlayerPosition.x, this.gamestate.canvasPlayerPosition.y)).div(this.scale):
+			null;
+		let mousePosition = (this.gamestate !== null) ?
+			new Vector2D(this.gamestate.player.position.x, this.gamestate.player.position.y).add(mouseDirection) :
+			null;
+		
+		let isRightButtonClicked = false;
+		if (this.prevIsRightButtonDown && !this.mouse.isRightButtonDown) isRightButtonClicked = true;
+		this.prevIsRightButtonDown = this.mouse.isRightButtonDown;
+
+		let inputUpdate = new InputUpdate(
+							++this.currentSequenceNumber, 
+							keys, 
+							keysClicked,
+							mouseDirection,
+							mousePosition, 
+							this.mouse.isLeftButtonDown, 
+							isRightButtonClicked,
+							Date.now(), 
+							deltaTime
+						);
+		return inputUpdate;
+	}
+
+	// Linear interpolation
+	performEntityInterpolation() {
+		let currTime = Date.now();
+		let otherPlayers = [];
+		let bullets = [];
+		let collectibles = [];
+
+		let interpolationIndex = this.getInterpolationIndex(currTime);
+		let gameStateUpdate_1 = this.gameStateUpdates[interpolationIndex];
+
+		if (interpolationIndex === this.gameStateUpdates.length - 1) {
+			for (let id in gameStateUpdate_1.otherPlayers) {
+				if (id === this.ID) {
+					continue;
+				}
+				let otherPlayer = gameStateUpdate_1.otherPlayers[id];
+				if (this.isWithinCameraView(otherPlayer.position)) {
+					otherPlayers.push(
+						new OtherPlayer(
+							otherPlayer.position, 
+							otherPlayer.size, 
+							otherPlayer.orientation, 
+							otherPlayer.health, 
+							otherPlayer.weapon,
+							otherPlayer.base, 
+							otherPlayer.color, 
+							otherPlayer.outlineColor
+						)
+					);
+				}
+			}
+			for (let id in gameStateUpdate_1.bullets) {
+				let bullet = gameStateUpdate_1.bullets[id];
+				if (this.isWithinCameraView(bullet.position)) {
+					bullets.push(
+						new ClientBullet(
+							bullet.position, 
+							bullet.radius, 
+							bullet.health, 
+							bullet.color, 
+							bullet.outlineColor
+						)
+					);
+				}
+			}
+			for (let id in gameStateUpdate_1.collectibles) {
+				let collectible = gameStateUpdate_1.collectibles[id];
+				if (this.isWithinCameraView(collectible.position)) {
+					collectibles.push(
+						new ClientCollectible(
+							collectible.position, 
+							collectible.size, 
+							collectible.orientation, 
+							collectible.health, 
+							collectible.color, 
+							collectible.outlineColor
+						)
+					);
+				}
+			}
+		}
+		else {
+			let gameStateUpdate_2 = this.gameStateUpdates[interpolationIndex + 1];
+			let interpolationTime = currTime - this.entityInterpolationOffset;
+			let serverDiffTime = gameStateUpdate_2.serverTime - gameStateUpdate_1.serverTime;
+			let interpolationFactor = (interpolationTime - gameStateUpdate_1.serverTime) / serverDiffTime;
+			let antiInterpolationFactor = 1 - interpolationFactor;
+
+			for (let id in gameStateUpdate_2.otherPlayers) {
+				if (id === this.ID) {
+					continue;
+				}
+				let otherPlayer_2 = gameStateUpdate_2.otherPlayers[id];
+				if (this.isWithinCameraView(otherPlayer_2.position)) {
+					if (id in gameStateUpdate_1.otherPlayers) {
+						let otherPlayer_1 = gameStateUpdate_1.otherPlayers[id];
+						var interpX = antiInterpolationFactor * otherPlayer_1.position.x + interpolationFactor * otherPlayer_2.position.x;
+						var interpY = antiInterpolationFactor * otherPlayer_1.position.y + interpolationFactor * otherPlayer_2.position.y;
+						var interpOrientation = this.interpolateOrientation(otherPlayer_1.orientation, otherPlayer_2.orientation, interpolationFactor, antiInterpolationFactor);
+					}
+					else {
+						var interpX = otherPlayer_2.position.x;
+						var interpY = otherPlayer_2.position.y;
+						var interpOrientation = otherPlayer_2.orientation;
+					}
+
+					otherPlayers.push(
+						new OtherPlayer(
+							{
+								x: interpX,
+								y: interpY
+							}, 
+							otherPlayer_2.size, 
+							interpOrientation, 
+							otherPlayer_2.health, 
+							otherPlayer_2.weapon, 
+							otherPlayer_2.base,
+							otherPlayer_2.color, 
+							otherPlayer_2.outlineColor
+						)
+					);
+				}
+			}
+
+			for (let id in gameStateUpdate_2.bullets) {
+				let bullet_2 = gameStateUpdate_2.bullets[id];
+				if (this.isWithinCameraView(bullet_2.position)) {
+					if (id in gameStateUpdate_1.bullets) {
+						let bullet_1 = gameStateUpdate_1.bullets[id];
+						var interpX = antiInterpolationFactor * bullet_1.position.x + interpolationFactor * bullet_2.position.x;
+						var interpY = antiInterpolationFactor * bullet_1.position.y + interpolationFactor * bullet_2.position.y;
+					}
+					else {
+						var interpX = bullet_2.position.x;
+						var interpY = bullet_2.position.y;
+					}
+
+					bullets.push(
+						new ClientBullet(
+							{
+								x: interpX,
+								y: interpY
+							}, 
+							bullet_2.radius, 
+							bullet_2.health, 
+							bullet_2.color, 
+							bullet_2.outlineColor
+						)
+					);
+				}
+			}
+			for (let id in gameStateUpdate_2.collectibles) {
+				let collectible_2 = gameStateUpdate_2.collectibles[id];
+				if (this.isWithinCameraView(collectible_2.position)) {
+					if (id in gameStateUpdate_1.collectibles) {
+						let collectible_1 = gameStateUpdate_1.collectibles[id];
+						var interpX = antiInterpolationFactor * collectible_1.position.x + interpolationFactor * collectible_2.position.x;
+						var interpY = antiInterpolationFactor * collectible_1.position.y + interpolationFactor * collectible_2.position.y;
+						var interpOrientation = this.interpolateOrientation(collectible_1.orientation, collectible_2.orientation, interpolationFactor, antiInterpolationFactor);
+					}
+					else {
+						var interpX = collectible_2.position.x;
+						var interpY = collectible_2.position.y;
+						var interpOrientation = collectible_2.orientation;
+					}
+
+					collectibles.push(
+						new ClientCollectible(
+							{
+								x: interpX,
+								y: interpY
+							}, 
+							collectible_2.size, 
+							interpOrientation, 
+							collectible_2.health, 
+							collectible_2.color, 
+							collectible_2.outlineColor
+						)
+					);
+				}
+			}
+		}
+
+		return {
+			otherPlayers: otherPlayers,
+			bullets: bullets,
+			collectibles: collectibles
+		}
+	}
+
+	interpolateOrientation(orientation_1, orientation_2, interpolationFactor, antiInterpolationFactor) {
+		if (orientation_1 < Globals.DEGREES_90 && orientation_2 > Globals.DEGREES_270) {
+			orientation_1 += Globals.DEGREES_360;
+		}
+		else if (orientation_2 < Globals.DEGREES_90 && orientation_1 > Globals.DEGREES_270) {
+			orientation_2 += Globals.DEGREES_360;
+		}
+
+		let interpOrientation = antiInterpolationFactor * orientation_1 + interpolationFactor * orientation_2;
+		if (interpOrientation > Globals.DEGREES_360) {
+			interpOrientation -= Globals.DEGREES_360;
+		}
+		return interpOrientation;
+	}
+
+	getInterpolationIndex(currTime) {
+		let interpolationIndex = this.gameStateUpdates.findIndex(
+			function(gameStateUpdate) {
+				return (currTime - gameStateUpdate.serverTime) < this.entityInterpolationOffset;
+			}.bind(this)
+		);
+		if (interpolationIndex === -1) {
+			interpolationIndex = this.gameStateUpdates.length - 1;
+		}
+		else if (interpolationIndex > 0) {
+			interpolationIndex--;
+		}
+
+		return interpolationIndex;
+	}
+
+	isWithinCameraView(position) {
+		let playerPos = this.gamestate.player.position;
+		let viewWidth = this.canvas.width/2 + 100;
+		let viewHeight = this.canvas.height/2 + 100;
+		return 	position.x > playerPos.x - viewWidth && position.x < playerPos.x + viewWidth &&
+				position.y > playerPos.y - viewHeight && position.y < playerPos.y + viewHeight;
+	}
+	
+	onWindowResize(event) {
+		this.scaleCanvas();
+	}
+}
+
+module.exports = Client;
+
+},{"../lib/Globals":148,"../lib/MouseState":149,"../lib/THREEx.KeyboardState":150,"../lib/Vector2D":151,"../shared/InputProcessing":158,"../shared/InputUpdate":159,"./ClientBullet":140,"./ClientCollectible":141,"./ClientGameState":142,"./ClientPlayer":143,"./OtherPlayer":146}],139:[function(require,module,exports){
+'use strict';
+
+var BaseNode = require('../shared/BaseNode');
+var Vector2D = require('../lib/Vector2D');
+var Globals = require('../lib/Globals');
+var HealthBar = require('./HealthBar');
+
+
+class ClientBaseNode extends BaseNode{
+	constructor(ownerID, position, parent, children, radius, health, color, outlineColor, id) {
+		super(ownerID, new Vector2D(position.x, position.y), parent, children, radius, health, color, outlineColor, id);
+		var _children = [];
+		for (let i in this.children){
+			_children.push(new ClientBaseNode(this.ownerID,
+										this.children[i].position, //recursively generate all child Nodes
+										this, 
+										this.children[i].children,
+										this.children[i].radius, 
+										this.children[i].health, 
+										this.children[i].color, 
+										this.children[i].outlineColor,
+										this.children[i].id));
+		}
+		this.children = _children;
+		this.healthBar = new HealthBar(new Vector2D(0, this.radius + 12), this.radius * 2.5);
+	}
+
+	//update the base based on the nodeUpdate 
+	setUpdateProperties(nodeUpdate){
+		//console.log(nodeUpdate);
+		for (let i in nodeUpdate){ 
+			if (i!=='children' && i!=='id'){
+				//console.log(i);
+				this[i] = nodeUpdate[i]; //assign all properties from the update
+			}
+		}
+		let j = 0;
+		while (j < this.children.length){ 
+			//console.log("i "+ j);
+			//console.log("children "+this.children.length);
+			if (nodeUpdate.children[this.children[j].id] === undefined){ //deleted nodes
+				this.children.splice(j,1);
+				//console.log(this.children[j].id+ " is undefined!");
+			}
+			else{ //updated nodes
+				this.children[j].setUpdateProperties(nodeUpdate.children[this.children[j].id]);
+				nodeUpdate.children[this.children[j].id]._checked = true;
+				//console.log(this.children[j].id+ " is checked!");
+				//console.log(nodeUpdate.children[this.children[j].id]);
+				j++;
+			}
+		}
+		//new nodes
+		for (let k in nodeUpdate.children){
+			//console.log(k);
+			if (nodeUpdate.children[k]._checked === undefined){
+				//console.log(k + " is not checked!");
+				//console.log(k);
+				this.children.push(new ClientBaseNode(nodeUpdate.children[k].ownerID, 
+												nodeUpdate.children[k].position, 
+												this,
+												nodeUpdate.children[k].children,
+												nodeUpdate.children[k].radius,
+												nodeUpdate.children[k].health,
+												nodeUpdate.children[k].color,
+												nodeUpdate.children[k].outlineColor, 
+												nodeUpdate.children[k].id));
+			}
+			else
+				delete nodeUpdate.children[k]._checked;
+		}
+		//console.log("finished updating " + this.id);
+
+	}
+
+
+	draw(ctx, transformToCameraCoords) {  //iterative draw 
+		transformToCameraCoords();
+		var drawQueue = [this];
+		//console.log(this.health);
+		while (drawQueue.length != 0){
+			transformToCameraCoords();
+			let item = drawQueue.shift();
+			ctx.strokeStyle = 'rgba(80,80,80,1)';
+			ctx.lineWidth = 3;
+			ctx.beginPath();
+			for (let i in item.children){
+        		ctx.moveTo(item.position.x, item.position.y);
+				ctx.lineTo(item.children[i].position.x, item.children[i].position.y);
+				drawQueue.push(item.children[i]);
+			}
+			ctx.stroke();
+			ctx.beginPath();
+			ctx.arc(item.position.x, item.position.y, item.radius, 0, Globals.DEGREES_360); // unrounded
+			//ctx.arc(~~(0.5 + this.position.x), ~~(0.5 + this.position.y), this.radius, 0, Globals.DEGREES_360); //rounded
+			ctx.fillStyle = item.color;
+			ctx.fill();
+			ctx.strokeStyle = item.outlineColor;
+			ctx.lineWidth = 3;
+			ctx.stroke();
+
+			item.healthBar.update(item.health);
+			if (item.health < 100) {
+				ctx.transform(1, 0, 0, 1, item.position.x, item.position.y); //unrounded
+				//ctx.transform(1, 0, 0, 1, ~~(0.5 + this.position.x), ~~(0.5 + this.position.y)); //rounded
+				item.healthBar.draw(ctx);
+			}
+		}
+	}
+
+	// draw(ctx, transformToCameraCoords) {   //recursive draw
+	// 	for (var i = 0; i < this.children.length; i++){
+	// 		transformToCameraCoords();
+	// 		ctx.beginPath();
+ //        	ctx.moveTo(this.position.x, this.position.y);
+	// 		ctx.lineTo(this.children[i].position.x, this.children[i].position.y);
+	// 		ctx.strokeStyle = 'rgba(80,80,80,1)';
+	// 		ctx.lineWidth = 3;
+	// 		ctx.stroke();
+	// 		this.children[i].draw(ctx, transformToCameraCoords);
+	// 	}
+	// 	transformToCameraCoords();
+	// 	ctx.beginPath();
+	// 	ctx.arc(this.position.x, this.position.y, this.radius, 0, Globals.DEGREES_360); // unrounded
+	// 	//ctx.arc(~~(0.5 + this.position.x), ~~(0.5 + this.position.y), this.radius, 0, Globals.DEGREES_360); //rounded
+	// 	ctx.fillStyle = this.color;
+	// 	ctx.fill();
+	// 	ctx.strokeStyle = this.outlineColor;
+	// 	ctx.lineWidth = 3;
+	// 	ctx.stroke();
+
+	// 	this.healthBar.update(this.health);
+	// 	if (this.health < 100.0) {
+	// 		transformToCameraCoords();
+	// 		ctx.transform(1, 0, 0, 1, this.position.x, this.position.y); //unrounded
+	// 		//ctx.transform(1, 0, 0, 1, ~~(0.5 + this.position.x), ~~(0.5 + this.position.y)); //rounded
+	// 		this.healthBar.draw(ctx);
+	// 	}
+	// }
+
+}
+
+
+module.exports = ClientBaseNode;
+},{"../lib/Globals":148,"../lib/Vector2D":151,"../shared/BaseNode":153,"./HealthBar":145}],140:[function(require,module,exports){
+'use strict';
+
+var Bullet = require('../shared/Bullet');
+var Vector2D = require('../lib/Vector2D');
+var Globals = require('../lib/Globals');
+
+class ClientBullet extends Bullet {
+	constructor(position, radius = 7, health = 1, color = "black", outlineColor = 'rgba(80,80,80,1)') {
+		super(new Vector2D(position.x, position.y), radius, health, color, outlineColor);
+	}
+	
+	draw(ctx, transformToCameraCoords) {
+		transformToCameraCoords();
+		ctx.beginPath();
+		ctx.arc(this.position.x, this.position.y, this.radius, 0, Globals.DEGREES_360); // unrounded
+		//ctx.arc(~~(0.5 + this.position.x), ~~(0.5 + this.position.y), this.radius, 0, Globals.DEGREES_360); //rounded
+		ctx.fillStyle = this.color;
+		ctx.fill();
+		ctx.strokeStyle = this.outlineColor;
+		ctx.lineWidth = 2;
+		ctx.stroke();
+	}
+}
+
+module.exports = ClientBullet;
+
+},{"../lib/Globals":148,"../lib/Vector2D":151,"../shared/Bullet":154}],141:[function(require,module,exports){
+'use strict';
+
+var Collectible = require('../shared/Collectible');
+var HealthBar = require('./HealthBar');
+var Vector2D = require('../lib/Vector2D');
+
+class ClientCollectible extends Collectible {
+	constructor(position, size, orientation, health, color, outlineColor) {
+		super(new Vector2D(position.x, position.y), health);
+		this.size = size;
+		this.orientation = orientation;
+		this.color = color;
+		this.outlineColor = outlineColor;
+		this.healthBar = new HealthBar(new Vector2D(0, this.size + 10), this.size * 1.5);
+	}
+	
+	draw(ctx, transformToCameraCoords) {
+		transformToCameraCoords();
+		ctx.transform(1, 0, 0, 1, this.position.x, this.position.y); //unrounded
+		//ctx.transform(1, 0, 0, 1, ~~(0.5 + this.position.x), ~~(0.5 + this.position.y)); //rounded
+		ctx.rotate(this.orientation);
+		ctx.transform(1, 0, 0, 1, -this.size/2, -this.size/2);
+		ctx.fillStyle = this.color;
+		ctx.fillRect(0, 0, this.size, this.size);
+		
+		ctx.strokeStyle = this.outlineColor;
+		ctx.lineWidth = 3;
+		ctx.strokeRect(0, 0, this.size, this.size);
+
+		this.healthBar.update(this.health);
+		if (this.health < 100.0) {
+			transformToCameraCoords();
+			ctx.transform(1, 0, 0, 1, this.position.x, this.position.y); //unrounded
+			//ctx.transform(1, 0, 0, 1, ~~(0.5 + this.position.x), ~~(0.5 + this.position.y)); //rounded
+			this.healthBar.draw(ctx);
+		}
+	}
+}
+
+module.exports = ClientCollectible;
+
+},{"../lib/Vector2D":151,"../shared/Collectible":155,"./HealthBar":145}],142:[function(require,module,exports){
+'use strict';
+
+var GameState = require('../shared/GameState');
+var ClientPlayer = require('./ClientPlayer');
+var Vector2D = require('../lib/Vector2D');
+var Globals = require('../lib/Globals');
+
+class ClientGameState extends GameState {
+    constructor(worldWidth, worldHeight, playerUpdateProperties) {
+        super(worldWidth, worldHeight);
+
+		this.player = new ClientPlayer(playerUpdateProperties);
+		this.canvas = document.getElementById('canvas');
+		this.canvasPlayerPosition = new Vector2D(this.canvas.width/2, this.canvas.height/2);
+		document.getElementById("grid").draggable = false;
+		this.grid = document.getElementById("grid");
+    }
+	
+	draw(ctx, scale, otherPlayers, bullets, collectibles) {
+		let lengthFromCenter = scale*50*Math.pow((this.player.velocity.getLength()/this.player.maxSpeed), 2);
+		let displacementFromCenter = new Vector2D().copy(this.player.velocity).setLength(lengthFromCenter); //displacement is a vector in the same direction as velocity, but length = length(velocity)^2 *50
+
+		this.canvasPlayerPosition.x = this.canvas.width/2 + displacementFromCenter.x; //secret sauce for camera movement
+		this.canvasPlayerPosition.y = this.canvas.height/2 + displacementFromCenter.y; //secret sauce for camera movement
+
+		let playerPosition = this.player.position;
+		let canvas = this.canvas;
+		let canvasPlayerPosition = this.canvasPlayerPosition;
+		let transformToCameraCoords = function() {
+			ctx.setTransform(scale, 0, 0, scale, 
+				canvasPlayerPosition.x - playerPosition.x*scale, //unrounded
+				canvasPlayerPosition.y - playerPosition.y*scale //unrounded
+			);
+		};
+
+		this.drawBackground(ctx, transformToCameraCoords);
+		otherPlayers.map(function(otherPlayer) { otherPlayer.draw(ctx, transformToCameraCoords); });
+		this.player.draw(
+			ctx,
+			function() {
+				ctx.setTransform(scale, 0, 0, scale, canvasPlayerPosition.x, canvasPlayerPosition.y);
+			},
+			transformToCameraCoords
+		);
+		bullets.map(function(bullet) { bullet.draw(ctx, transformToCameraCoords); });
+		collectibles.map(function(collectible) { collectible.draw(ctx, transformToCameraCoords); });
+	}
+
+	setPlayerProperties(playerUpdateProperties) {
+		this.player.setUpdateProperties(playerUpdateProperties);
+	}
+	
+	updatePlayer(input, deltaTime) {
+		this.player.update(
+			deltaTime, 
+			input.keysPressed, 
+			input.mouseDirection
+		);
+	}
+
+	drawBackground(ctx, transformToCameraCoords) {
+		transformToCameraCoords();
+		ctx.rect(0, 0, this.worldWidth, this.worldHeight);
+		ctx.fillStyle = ctx.createPattern(this.grid, "repeat");
+		ctx.fill();
+	}
+}
+
+module.exports = ClientGameState;
+
+},{"../lib/Globals":148,"../lib/Vector2D":151,"../shared/GameState":157,"./ClientPlayer":143}],143:[function(require,module,exports){
+'use strict';
+
+var Player = require('../shared/Player');
+var ClientWeapon = require('./ClientWeapon');
+var ClientBaseNode = require('./ClientBaseNode');
+var HealthBar = require('./HealthBar');
+var Vector2D = require('../lib/Vector2D');
+var Globals = require('../lib/Globals');
+
+const DIAG_ACCEL_FACTOR = Math.cos(Math.PI/4);
+
+class ClientPlayer extends Player {
+	constructor(playerUpdateProperties) {
+		super(playerUpdateProperties.velocity, playerUpdateProperties.position, playerUpdateProperties.color);
+
+		this.setUpdateProperties(playerUpdateProperties);
+		this.healthBar = new HealthBar(new Vector2D(0, this.radius + 12), this.radius * 2.5);
+	}
+
+	setUpdateProperties(playerUpdateProperties) {
+		this.velocity = new Vector2D(playerUpdateProperties.velocity.x, playerUpdateProperties.velocity.y);
+		this.position = new Vector2D(playerUpdateProperties.position.x, playerUpdateProperties.position.y);
+		this.size = playerUpdateProperties.size;
+		this.acceleration = playerUpdateProperties.acceleration;
+		this.deceleration = playerUpdateProperties.deceleration;
+		this.maxSpeed = playerUpdateProperties.maxSpeed;
+		this.minSpeed = playerUpdateProperties.minSpeed;
+		this.radius = this.size/2;
+		this.orientation = playerUpdateProperties.orientation;
+		this.health = playerUpdateProperties.health;
+		let weapon = playerUpdateProperties.weapon;
+		this.weapon = new ClientWeapon(weapon.name, weapon.distanceFromPlayer, weapon.size, weapon.color, weapon.outlineColor);
+		let base = playerUpdateProperties.base;
+		if (base !== null){
+			if (this.base === null){
+				this.base = new ClientBaseNode(base.position, null, base.children, base.radius, base.health, base.color, base.outlineColor, base.id);
+			}
+			else{
+				this.base.setUpdateProperties(base);
+			}
+		}
+		else{
+			this.base = null;
+		}
+		this.color = playerUpdateProperties.color;
+		this.outlineColor = playerUpdateProperties.outlineColor;
+	}
+	
+	draw(ctx, transformToCameraCoords, transformToCameraCoords2) {
+		if (this.base !== null)
+			this.base.draw(ctx, transformToCameraCoords2);
+
+		transformToCameraCoords();
+		ctx.beginPath();
+		ctx.arc(0, 0, this.radius, 0, 2*Math.PI);
+		ctx.fillStyle = this.color;
+		ctx.fill();
+
+		transformToCameraCoords();
+		ctx.rotate(this.orientation);
+		this.weapon.draw(ctx);
+
+		transformToCameraCoords();
+		this.healthBar.update(this.health);
+		this.healthBar.draw(ctx);
+		
+		transformToCameraCoords();
+		ctx.beginPath();
+		ctx.arc(0, 0, this.radius, 0, 2*Math.PI);
+		ctx.strokeStyle = this.outlineColor;
+		ctx.lineWidth = 3;
+		ctx.stroke();
+	}
+}
+
+module.exports = ClientPlayer;
+
+},{"../lib/Globals":148,"../lib/Vector2D":151,"../shared/Player":160,"./ClientBaseNode":139,"./ClientWeapon":144,"./HealthBar":145}],144:[function(require,module,exports){
+'use strict';
+
+var Weapon = require('../shared/Weapon');
+
+class ClientWeapon extends Weapon {
+	constructor(name, distanceFromPlayer, size, color, outlineColor) {
+		super(name, distanceFromPlayer, size, color, outlineColor);
+	}
+	
+	draw(ctx) {
+		ctx.transform(1, 0, 0, 1, this.position.x, this.position.y); //unrounded
+		//ctx.transform(1, 0, 0, 1, ~~(0.5 + this.position.x), ~~(0.5 + this.position.y)); //rounded
+		ctx.fillStyle = this.color;
+		ctx.fillRect(0, 0, this.size, this.size);
+		
+		ctx.strokeStyle = this.outlineColor;
+		ctx.lineWidth = 3;
+		ctx.strokeRect(0, 0, this.size, this.size);
+	}
+}
+
+/*
+// dark grey: 'rgba(80,80,80,1)'
+var ClientWeaponFactory = {
+						//name				dist		  		size	color					damage	health	speed	rate	spread	rad	exp		bullet color			bullet outline color
+	makePlebPistol: function(distanceFromPlayer) {
+		return new ClientWeapon("Pleb Pistol", distanceFromPlayer, 19, 'rgba(255,0,128,1)');
+	},
+	makeFlameThrower: function(distanceFromPlayer) {
+		return new ClientWeapon("Flame Thrower", distanceFromPlayer, 20, 'rgba(255,140,0,1)');
+	},
+	makeVolcano: function(distanceFromPlayer) {
+		return new ClientWeapon("Volcano", distanceFromPlayer, 21, 'rgba(255,0,0,1)');
+	}
+};
+*/
+
+module.exports = ClientWeapon;
+
+},{"../shared/Weapon":161}],145:[function(require,module,exports){
+'use strict';
+
+var GameObject = require('../shared/GameObject');
+
+class HealthBar extends GameObject {
+	constructor(position, size) {
+		super(position, size, 'rgba(0,215,100,1)');
+
+        this.outlineColor = 'rgba(80,80,80,1)';
+        this.halfLength = this.size/2;
+        this.width = 6;
+        this.percent = 100;
+    }
+
+    update(health) {
+        this.percent = health;
+    }
+
+    draw(ctx) {
+        ctx.transform(1, 0, 0, 1, this.position.x - this.halfLength, this.position.y); //unrounded
+		//ctx.transform(1, 0, 0, 1, ~~(0.5 + this.position.x - this.halfLength), ~~(0.5 + this.position.y)); //rounded
+		ctx.fillStyle = this.outlineColor;
+        ctx.fillRect(0, 0, this.size, this.width);
+        ctx.fillStyle = this.color;
+        ctx.fillRect(0, 0, (this.size * this.percent) / 100, this.width); //unrounded
+		//ctx.fillRect(0, 0, ~~(0.5 + (this.size * this.percent) / 100), this.width); //rounded
+		ctx.strokeStyle = this.outlineColor;
+		ctx.lineWidth = 2;
+		ctx.strokeRect(0, 0, this.size, this.width);
+    }
+}
+
+module.exports = HealthBar;
+
+},{"../shared/GameObject":156}],146:[function(require,module,exports){
+'use strict';
+
+var GameObject = require('../shared/GameObject');
+var ClientWeapon = require('./ClientWeapon');
+var ClientBaseNode = require('./ClientBaseNode');
+var HealthBar = require('./HealthBar');
+var Vector2D = require('../lib/Vector2D');
+
+class OtherPlayer extends GameObject {
+    constructor(position, size, orientation, health, weapon, base, color, outlineColor) {
+        super(position, size, color);
+
+        this.radius = this.size/2;
+        this.orientation = orientation;
+        this.health = health;
+        this.weapon = new ClientWeapon(weapon.name, weapon.distanceFromPlayer, weapon.size, weapon.color, weapon.outlineColor);
+        this.outlineColor = outlineColor;
+        if (base !== null)
+			this.base = new ClientBaseNode(base.position, null, base.children, base.radius, base.health, base.color, base.outlineColor, base.id);
+		else this.base = null;
+		this.healthBar = new HealthBar(new Vector2D(0, this.radius + 12), this.radius * 2.5);
+    }
+
+	draw(ctx, transformToCameraCoords) {
+		if (this.base !== null)
+			this.base.draw(ctx, transformToCameraCoords);
+
+		transformToCameraCoords();
+		ctx.beginPath();
+		ctx.arc(this.position.x, this.position.y, this.radius, 0, 2*Math.PI);
+		ctx.fillStyle = this.color;
+		ctx.fill();
+
+		transformToCameraCoords();
+        ctx.transform(1, 0, 0, 1, this.position.x, this.position.y);
+		ctx.rotate(this.orientation);
+		this.weapon.draw(ctx);
+
+		transformToCameraCoords();
+		this.healthBar.update(this.health);
+        ctx.transform(1, 0, 0, 1, this.position.x, this.position.y);
+		this.healthBar.draw(ctx);
+		
+		transformToCameraCoords();
+		ctx.beginPath();
+		ctx.arc(this.position.x, this.position.y, this.radius, 0, 2*Math.PI);
+		ctx.strokeStyle = this.outlineColor;
+		ctx.lineWidth = 3;
+		ctx.stroke();
+	}
+}
+
+module.exports = OtherPlayer;
+
+},{"../lib/Vector2D":151,"../shared/GameObject":156,"./ClientBaseNode":139,"./ClientWeapon":144,"./HealthBar":145}],147:[function(require,module,exports){
+'use strict';
+
+var Client = require('./Client');
+new Client();
+
+},{"./Client":138}],148:[function(require,module,exports){
+module.exports = {
+    DEGREES_90: Math.PI/2,
+    DEGREES_180: Math.PI,
+    DEGREES_270: 3*Math.PI/2,
+    DEGREES_360: 2*Math.PI,
+    WORLD_WIDTH: 4000,
+    WORLD_HEIGHT: 4000,
+    DEFAULT_HEIGHT: 720,
+    DEFAULT_WIDTH: 1280,
+    DEFAULT_ASPECT: 16/9,
+    DEFAULT_SCALE: 1,
+
+
+    areObjectsSame: function(o1, o2) {
+        return JSON.stringify(o1) === JSON.stringify(o2);
+    },
+
+    clone: function(obj) {
+	    if (null == obj || "object" != typeof obj) return obj;
+	    var copy = obj.constructor();
+	    for (var attr in obj) {
+	        if (obj.hasOwnProperty(attr)) copy[attr] = this.clone(obj[attr]);
+	    }
+	    return copy;
+	}
+};
+
+},{}],149:[function(require,module,exports){
+/**
+ * Author: Kiran Sivakumar
+*/
+
+'use strict';
+
+class MouseState {	
+	constructor() {
+		this.x = 0;
+		this.y = 0;
+		this.isLeftButtonDown = false;
+		this.isScrollButtonDown = false;
+		this.isRightButtonDown = false;
+		document.onmousemove = this.onMouseMove.bind(this);
+		document.onmousedown = this.onMouseDown.bind(this);
+		document.onmouseup = this.onMouseUp.bind(this);
+	}
+	
+	onMouseMove(event) {
+		event = event || window.event;
+		this.x = event.clientX;
+		this.y = event.clientY;
+	}
+	
+	onMouseDown(event) {
+		event = event || window.event;
+		
+		if (event.button === MouseState.buttonCodes.left) {
+			this.isLeftButtonDown = true;
+		}
+		else if (event.button === MouseState.buttonCodes.scroll) {
+			this.isScrollButtonDown = true;
+		}
+		else if (event.button === MouseState.buttonCodes.right) {
+			this.isRightButtonDown = true;
+		}
+	}
+	
+	onMouseUp(event) {
+		event = event || window.event;
+		
+		if (event.button === MouseState.buttonCodes.left) {
+			this.isLeftButtonDown = false;
+		}
+		else if (event.button === MouseState.buttonCodes.scroll) {
+			this.isScrollButtonDown = false;
+		}
+		else if (event.button === MouseState.buttonCodes.right) {
+			this.isRightButtonDown = false;
+		}
+	}
+}
+
+MouseState.buttonCodes = {
+	left : 0,
+	scroll : 1,
+	right : 2
+};
+
+module.exports = MouseState;
+
+},{}],150:[function(require,module,exports){
+/** @namespace */
+var THREEx	= THREEx 		|| {};
+
+/**
+ * - NOTE: it would be quite easy to push event-driven too
+ *   - microevent.js for events handling
+ *   - in this._onkeyChange, generate a string from the DOM event
+ *   - use this as event name
+*/
+
+THREEx.KeyboardState	= function()
+{
+	this.keyCodes	= {};
+	this.modifiers	= {};
+	
+	var self	= this;
+	this._onKeyDown	= function(event){ self._onKeyChange(event, true); };
+	this._onKeyUp	= function(event){ self._onKeyChange(event, false);};
+	
+	document.addEventListener("keydown", this._onKeyDown, false);
+	document.addEventListener("keyup", this._onKeyUp, false);
+}
+
+/**
+ * To stop listening of the keyboard events
+*/
+THREEx.KeyboardState.prototype.destroy	= function()
+{	
+	document.removeEventListener("keydown", this._onKeyDown, false);
+	document.removeEventListener("keyup", this._onKeyUp, false);
+}
+
+THREEx.KeyboardState.MODIFIERS	= ['shift', 'ctrl', 'alt', 'meta'];
+
+THREEx.KeyboardState.ALIAS	= {
+	'left'		: 37,
+	'up'		: 38,
+	'right'		: 39,
+	'down'		: 40,
+	'space'		: 32,
+	'pageup'	: 33,
+	'pagedown'	: 34,
+	'tab'		: 9
+};
+
+/**
+ * to process the keyboard dom event
+*/
+THREEx.KeyboardState.prototype._onKeyChange	= function(event, pressed)
+{
+	var keyCode		= event.keyCode;
+	this.keyCodes[keyCode]	= pressed;
+	
+	this.modifiers['shift']= event.shiftKey;
+	this.modifiers['ctrl']	= event.ctrlKey;
+	this.modifiers['alt']	= event.altKey;
+	this.modifiers['meta']	= event.metaKey;
+}
+
+/**
+ * query keyboard state to know if a key is pressed of not
+ *
+ * @param {String} keyDesc the description of the key. format : modifiers+key e.g shift+A
+ * @returns {Boolean} true if the key is pressed, false otherwise
+*/
+THREEx.KeyboardState.prototype.pressed	= function(keyDesc)
+{
+	var keys	= keyDesc.split("+");
+	for(var i = 0; i < keys.length; i++){
+		var key		= keys[i];
+		var pressed;
+		if( THREEx.KeyboardState.MODIFIERS.indexOf( key ) !== -1 ){
+			pressed	= this.modifiers[key];
+		}else if( Object.keys(THREEx.KeyboardState.ALIAS).indexOf( key ) != -1 ){
+			pressed	= this.keyCodes[ THREEx.KeyboardState.ALIAS[key] ];
+		}else {
+			pressed	= this.keyCodes[key.toUpperCase().charCodeAt(0)]
+		}
+		if( !pressed)	return false;
+	};
+	return true;
+}
+
+module.exports = THREEx.KeyboardState;
+
+},{}],151:[function(require,module,exports){
+/**
+ * Author: Kiran Sivakumar
+*/
+
+'use strict';
+
+class Vector2D {	
+	constructor(x = 0, y = 0) {
+		this.x = x;
+		this.y = y;
+	}
+	
+	copy(other) {
+		this.x = other.x;
+		this.y = other.y;
+		return this;
+	}
+	
+	getLength() {
+		return Math.sqrt(Math.pow(this.x, 2) + Math.pow(this.y, 2));
+	}
+	
+	setLength(len) {
+		this.setToUnit();
+		this.mul(len);
+		return this;
+	}
+	
+	setToUnit() {
+		var len = this.getLength();
+		if (len === 0) {
+			return this;
+		}
+		
+		this.mul(1/len);
+		return this;
+	}
+	
+	set(x, y) {
+		this.x = x;
+		this.y = y;
+		return this;
+	}
+	
+	add(other) {
+		this.x += other.x;
+		this.y += other.y;
+		return this;
+	}
+	
+	sub(other) {
+		this.x -= other.x;
+		this.y -= other.y;
+		return this;
+	}
+	
+	mul(scalar) {
+		this.x *= scalar;
+		this.y *= scalar;
+		return this;
+	}
+
+	div(scalar) {
+		this.x /= scalar;
+		this.y /= scalar;
+		return this;
+	}
+	
+	neg() {
+		this.x *= -1;
+		this.y *= -1;
+		return this;
+	}
+}
+
+module.exports = Vector2D;
+
+},{}],152:[function(require,module,exports){
+(function (Buffer){
+//     uuid.js
+//
+//     Copyright (c) 2010-2012 Robert Kieffer
+//     MIT License - http://opensource.org/licenses/mit-license.php
+
+/*global window, require, define */
+(function(_window) {
+  'use strict';
+
+  // Unique ID creation requires a high quality random # generator.  We feature
+  // detect to determine the best RNG source, normalizing to a function that
+  // returns 128-bits of randomness, since that's what's usually required
+  var _rng, _mathRNG, _nodeRNG, _whatwgRNG, _previousRoot;
+
+  function setupBrowser() {
+    // Allow for MSIE11 msCrypto
+    var _crypto = _window.crypto || _window.msCrypto;
+
+    if (!_rng && _crypto && _crypto.getRandomValues) {
+      // WHATWG crypto-based RNG - http://wiki.whatwg.org/wiki/Crypto
+      //
+      // Moderately fast, high quality
+      try {
+        var _rnds8 = new Uint8Array(16);
+        _whatwgRNG = _rng = function whatwgRNG() {
+          _crypto.getRandomValues(_rnds8);
+          return _rnds8;
+        };
+        _rng();
+      } catch(e) {}
+    }
+
+    if (!_rng) {
+      // Math.random()-based (RNG)
+      //
+      // If all else fails, use Math.random().  It's fast, but is of unspecified
+      // quality.
+      var  _rnds = new Array(16);
+      _mathRNG = _rng = function() {
+        for (var i = 0, r; i < 16; i++) {
+          if ((i & 0x03) === 0) { r = Math.random() * 0x100000000; }
+          _rnds[i] = r >>> ((i & 0x03) << 3) & 0xff;
+        }
+
+        return _rnds;
+      };
+      if ('undefined' !== typeof console && console.warn) {
+        console.warn("[SECURITY] node-uuid: crypto not usable, falling back to insecure Math.random()");
+      }
+    }
+  }
+
+  function setupNode() {
+    // Node.js crypto-based RNG - http://nodejs.org/docs/v0.6.2/api/crypto.html
+    //
+    // Moderately fast, high quality
+    if ('function' === typeof require) {
+      try {
+        var _rb = require('crypto').randomBytes;
+        _nodeRNG = _rng = _rb && function() {return _rb(16);};
+        _rng();
+      } catch(e) {}
+    }
+  }
+
+  if (_window) {
+    setupBrowser();
+  } else {
+    setupNode();
+  }
+
+  // Buffer class to use
+  var BufferClass = ('function' === typeof Buffer) ? Buffer : Array;
+
+  // Maps for number <-> hex string conversion
+  var _byteToHex = [];
+  var _hexToByte = {};
+  for (var i = 0; i < 256; i++) {
+    _byteToHex[i] = (i + 0x100).toString(16).substr(1);
+    _hexToByte[_byteToHex[i]] = i;
+  }
+
+  // **`parse()` - Parse a UUID into it's component bytes**
+  function parse(s, buf, offset) {
+    var i = (buf && offset) || 0, ii = 0;
+
+    buf = buf || [];
+    s.toLowerCase().replace(/[0-9a-f]{2}/g, function(oct) {
+      if (ii < 16) { // Don't overflow!
+        buf[i + ii++] = _hexToByte[oct];
+      }
+    });
+
+    // Zero out remaining bytes if string was short
+    while (ii < 16) {
+      buf[i + ii++] = 0;
+    }
+
+    return buf;
+  }
+
+  // **`unparse()` - Convert UUID byte array (ala parse()) into a string**
+  function unparse(buf, offset) {
+    var i = offset || 0, bth = _byteToHex;
+    return  bth[buf[i++]] + bth[buf[i++]] +
+            bth[buf[i++]] + bth[buf[i++]] + '-' +
+            bth[buf[i++]] + bth[buf[i++]] + '-' +
+            bth[buf[i++]] + bth[buf[i++]] + '-' +
+            bth[buf[i++]] + bth[buf[i++]] + '-' +
+            bth[buf[i++]] + bth[buf[i++]] +
+            bth[buf[i++]] + bth[buf[i++]] +
+            bth[buf[i++]] + bth[buf[i++]];
+  }
+
+  // **`v1()` - Generate time-based UUID**
+  //
+  // Inspired by https://github.com/LiosK/UUID.js
+  // and http://docs.python.org/library/uuid.html
+
+  // random #'s we need to init node and clockseq
+  var _seedBytes = _rng();
+
+  // Per 4.5, create and 48-bit node id, (47 random bits + multicast bit = 1)
+  var _nodeId = [
+    _seedBytes[0] | 0x01,
+    _seedBytes[1], _seedBytes[2], _seedBytes[3], _seedBytes[4], _seedBytes[5]
+  ];
+
+  // Per 4.2.2, randomize (14 bit) clockseq
+  var _clockseq = (_seedBytes[6] << 8 | _seedBytes[7]) & 0x3fff;
+
+  // Previous uuid creation time
+  var _lastMSecs = 0, _lastNSecs = 0;
+
+  // See https://github.com/broofa/node-uuid for API details
+  function v1(options, buf, offset) {
+    var i = buf && offset || 0;
+    var b = buf || [];
+
+    options = options || {};
+
+    var clockseq = (options.clockseq != null) ? options.clockseq : _clockseq;
+
+    // UUID timestamps are 100 nano-second units since the Gregorian epoch,
+    // (1582-10-15 00:00).  JSNumbers aren't precise enough for this, so
+    // time is handled internally as 'msecs' (integer milliseconds) and 'nsecs'
+    // (100-nanoseconds offset from msecs) since unix epoch, 1970-01-01 00:00.
+    var msecs = (options.msecs != null) ? options.msecs : new Date().getTime();
+
+    // Per 4.2.1.2, use count of uuid's generated during the current clock
+    // cycle to simulate higher resolution clock
+    var nsecs = (options.nsecs != null) ? options.nsecs : _lastNSecs + 1;
+
+    // Time since last uuid creation (in msecs)
+    var dt = (msecs - _lastMSecs) + (nsecs - _lastNSecs)/10000;
+
+    // Per 4.2.1.2, Bump clockseq on clock regression
+    if (dt < 0 && options.clockseq == null) {
+      clockseq = clockseq + 1 & 0x3fff;
+    }
+
+    // Reset nsecs if clock regresses (new clockseq) or we've moved onto a new
+    // time interval
+    if ((dt < 0 || msecs > _lastMSecs) && options.nsecs == null) {
+      nsecs = 0;
+    }
+
+    // Per 4.2.1.2 Throw error if too many uuids are requested
+    if (nsecs >= 10000) {
+      throw new Error('uuid.v1(): Can\'t create more than 10M uuids/sec');
+    }
+
+    _lastMSecs = msecs;
+    _lastNSecs = nsecs;
+    _clockseq = clockseq;
+
+    // Per 4.1.4 - Convert from unix epoch to Gregorian epoch
+    msecs += 12219292800000;
+
+    // `time_low`
+    var tl = ((msecs & 0xfffffff) * 10000 + nsecs) % 0x100000000;
+    b[i++] = tl >>> 24 & 0xff;
+    b[i++] = tl >>> 16 & 0xff;
+    b[i++] = tl >>> 8 & 0xff;
+    b[i++] = tl & 0xff;
+
+    // `time_mid`
+    var tmh = (msecs / 0x100000000 * 10000) & 0xfffffff;
+    b[i++] = tmh >>> 8 & 0xff;
+    b[i++] = tmh & 0xff;
+
+    // `time_high_and_version`
+    b[i++] = tmh >>> 24 & 0xf | 0x10; // include version
+    b[i++] = tmh >>> 16 & 0xff;
+
+    // `clock_seq_hi_and_reserved` (Per 4.2.2 - include variant)
+    b[i++] = clockseq >>> 8 | 0x80;
+
+    // `clock_seq_low`
+    b[i++] = clockseq & 0xff;
+
+    // `node`
+    var node = options.node || _nodeId;
+    for (var n = 0; n < 6; n++) {
+      b[i + n] = node[n];
+    }
+
+    return buf ? buf : unparse(b);
+  }
+
+  // **`v4()` - Generate random UUID**
+
+  // See https://github.com/broofa/node-uuid for API details
+  function v4(options, buf, offset) {
+    // Deprecated - 'format' argument, as supported in v1.2
+    var i = buf && offset || 0;
+
+    if (typeof(options) === 'string') {
+      buf = (options === 'binary') ? new BufferClass(16) : null;
+      options = null;
+    }
+    options = options || {};
+
+    var rnds = options.random || (options.rng || _rng)();
+
+    // Per 4.4, set bits for version and `clock_seq_hi_and_reserved`
+    rnds[6] = (rnds[6] & 0x0f) | 0x40;
+    rnds[8] = (rnds[8] & 0x3f) | 0x80;
+
+    // Copy bytes to buffer, if provided
+    if (buf) {
+      for (var ii = 0; ii < 16; ii++) {
+        buf[i + ii] = rnds[ii];
+      }
+    }
+
+    return buf || unparse(rnds);
+  }
+
+  // Export public API
+  var uuid = v4;
+  uuid.v1 = v1;
+  uuid.v4 = v4;
+  uuid.parse = parse;
+  uuid.unparse = unparse;
+  uuid.BufferClass = BufferClass;
+  uuid._rng = _rng;
+  uuid._mathRNG = _mathRNG;
+  uuid._nodeRNG = _nodeRNG;
+  uuid._whatwgRNG = _whatwgRNG;
+
+  if (('undefined' !== typeof module) && module.exports) {
+    // Publish as node.js module
+    module.exports = uuid;
+  } else if (typeof define === 'function' && define.amd) {
+    // Publish as AMD module
+    define(function() {return uuid;});
+
+
+  } else {
+    // Publish as global (in browsers)
+    _previousRoot = _window.uuid;
+
+    // **`noConflict()` - (browser only) to reset global 'uuid' var**
+    uuid.noConflict = function() {
+      _window.uuid = _previousRoot;
+      return uuid;
+    };
+
+    _window.uuid = uuid;
+  }
+})('undefined' !== typeof window ? window : null);
+
+}).call(this,require("buffer").Buffer)
+},{"buffer":46,"crypto":54}],153:[function(require,module,exports){
+'use strict';
+
+var GameObject = require('./GameObject');
+var uuid = require('node-uuid');
+
+class BaseNode extends GameObject{
+	constructor(ownerID, position, parent, children, radius, health, color, outlineColor, id = uuid(), maxChildren = 2, maxLengthToChildren = 500, minLengthToChildren = 0) {
+		super(position, radius*2, color);
+		this.radius = radius; 
+		this.id = id;
+		this.health = health; 
+		//console.log("HEALTH IS "+this.health);
+		this.outlineColor = outlineColor; 
+		this.parent = parent; 
+		this.children = children; 
+		this.maxChildren = maxChildren;
+		this.maxLengthToChildren = maxLengthToChildren;
+		this.minLengthToChildren = minLengthToChildren;
+		if (parent === null){
+			this.distanceFromRoot = 0;
+			this.maxChildren = 3;
+		}
+		else this.distanceFromRoot = parent.distanceFromRoot + 1;
+		this.body = Bodies.circle(position.x, position.y, radius, {isStatic: true});
+		this.position = this.body.position;
+		// Body.setVelocity(this.body, velocity);
+		// this.velocity = this.body.velocity;
+		this.ownerID = ownerID;
+
+	}
+
+	addParent(node){
+		this.parent = node;
+		this.distanceFromRoot = parent.distanceFromRoot + 1;
+	}
+
+	addChild(node){
+		this.children.push(node);
+	}
+
+	removeChild(i){
+		this.children.splice(i,1);
+	}
+
+	getTreeSize(){
+		var size = 1;
+		for (let i = 0; i < this.children.length; i++){
+			size += this.children[i].getTreeSize();
+		}
+		return size;
+	}
+
+	isHealthy(){
+		for (let i = 0; i<this.children.length; i++){
+			if (this.children[i].isHealthy() === false)
+				return false;
+		}
+		return this.health === 100;
+	}
+
+	// findBaseNode(rt, id){
+	// 	if (rt.id === id) return rt;
+	// 	for (var i = 0; i < rt.children.length; i++){
+	// 		findBaseNode(rt.children[i], id);
+	// 	}
+	// }
+
+	delete(){
+		if (this.parent !== null){
+			let children = this.parent.children;
+			for(let i = 0; children.length; i++){
+				if (children[i] === this){
+					this.parent.removeChild(i);
+					break;
+				}
+			}
+		}
+		//this.parent = null;
+	}
+}
+
+module.exports = BaseNode;
+},{"./GameObject":156,"node-uuid":152}],154:[function(require,module,exports){
+'use strict';
+
+var GameObject = require('./GameObject');
+
+class Bullet extends GameObject {
+	constructor(position, radius = 7, health = 1, color = "black", outlineColor = 'rgba(80,80,80,1)') {
+		super(position, radius*2, color);
+		this.radius = radius;
+		this.health = health;
+		this.outlineColor = outlineColor;
+	}
+}
+
+module.exports = Bullet;
+
+},{"./GameObject":156}],155:[function(require,module,exports){
+'use strict';
+
+var GameObject = require('./GameObject');
+var Globals = require('../lib/Globals');
+
+class Collectible extends GameObject {
+	constructor(position, health = 100) {
+		super(position, 20, 'rgba(255,192,0,1)');
+		this.orientation = Math.random() * Globals.DEGREES_360;
+		this.health = health;
+		this.outlineColor = 'rgba(80,80,80,1)';
+	}
+}
+
+module.exports = Collectible;
+
+},{"../lib/Globals":148,"./GameObject":156}],156:[function(require,module,exports){
+'use strict';
+
+/* Abstract */
+class GameObject {
+	constructor(position, size, color, shape) {
+		if (this.constructor === GameObject) {
+			throw new Error("Attempt to instantiate abstract class GameObject.");
+		}
+		
+		this.position = position;
+		this.size = size;
+		this.color = color;
+		this.shape = shape; 
+	}
+	
+	update(deltaTime) {
+		throw new Error("Abstract method called: GameObject.prototype.update().");
+	}
+	
+	draw(ctx, transformToCameraCoords) {
+		throw new Error("Abstract method called: GameObject.prototype.draw().");
+	}
+}
+
+module.exports = GameObject;
+
+},{}],157:[function(require,module,exports){
+'use strict';
+
+class GameState {	
+	constructor(worldWidth, worldHeight) {
+		this.worldWidth = worldWidth;
+		this.worldHeight = worldHeight;
+	}
+}
+
+module.exports = GameState;
+
+},{}],158:[function(require,module,exports){
+var Globals = require('../lib/Globals');
+var Vector2D = require('../lib/Vector2D');
+
+var DIAG_ACCEL_FACTOR = Math.cos(Math.PI/4);
+
+var convertToOrientation = function(direction) {
+	if (direction.x !== 0) {
+		let orientation = Math.atan2(direction.y, direction.x);
+		if (orientation < 0) {
+			orientation += Globals.DEGREES_360;
+		}
+		return orientation;
+	}
+	else if (direction.y > 0) {
+		return Globals.DEGREES_90;
+	}
+	else {
+		return Globals.DEGREES_270;
+	}
+};
+
+var processMovementInput = function(input, player){
+	let accelerationVec = new Vector2D(0, 0);
+	let acceleration = player.acceleration;
+
+	if (input.keysPressed.numDirKeysPressed === 2) 
+		acceleration *= DIAG_ACCEL_FACTOR;
+
+	let none = true;
+	for (let i in input.keysPressed){
+		switch (i) {
+			case 'W':
+				accelerationVec.y -= acceleration;
+				none = false;
+				break;
+			case 'A':
+				accelerationVec.x -= acceleration;
+				none = false;
+				break;
+			case 'S':
+				accelerationVec.y += acceleration;
+				none = false;
+				break;
+			case 'D':
+				accelerationVec.x += acceleration;
+				none = false;
+				break;
+		}
+	}
+
+	if (none){
+		if (player.velocity.getLength() < player.minSpeed) {
+			player.velocity.set(0, 0);
+		}
+		else {
+			accelerationVec.copy(player.velocity)
+						.setLength(player.deceleration)
+						.neg();
+		}
+	}
+
+	player.velocity.add(new Vector2D().copy(accelerationVec).mul(input.deltaTime));
+	if (player.velocity.getLength() > player.maxSpeed) {
+		player.velocity.setLength(player.maxSpeed);
+	}
+	
+	let displacement = new Vector2D().copy(player.velocity).mul(input.deltaTime);
+	player.position.add(displacement);
+	player.orientation = convertToOrientation(input.mouseDirection);
+
+	return displacement;
+};
+
+
+var processWeaponInput = function(input, player){
+
+};
+
+var processBaseInput = function(input, player){
+
+};
+
+var processInput = function(input, player){
+	processMovementInput(input, player);
+	processWeaponInput(input, player);
+	processBaseInput(input, player);
+};
+
+module.exports = {
+	processInput: processInput, 
+	processMovementInput: processMovementInput,
+	processWeaponInput: processWeaponInput,
+	processBaseInput: processBaseInput
+};
+
+
+},{"../lib/Globals":148,"../lib/Vector2D":151}],159:[function(require,module,exports){
+'use strict';
+
+class InputUpdate {
+    constructor(sequenceNumber, keysPressed, keysClicked, mouseDirection, mousePosition, isMouseLeftButtonDown, isMouseRightButtonClicked, timestamp, deltaTime) {
+        this.sequenceNumber = sequenceNumber;
+        this.keysPressed = keysPressed;
+        this.keysClicked = keysClicked;
+        this.mouseDirection = mouseDirection;
+        this.mousePosition = mousePosition;
+        this.isMouseLeftButtonDown = isMouseLeftButtonDown;
+        this.isMouseRightButtonClicked = isMouseRightButtonClicked;
+        this.timestamp = timestamp;
+        this.deltaTime = deltaTime;
+    }
+}
+
+module.exports = InputUpdate;
+
+},{}],160:[function(require,module,exports){
+'use strict';
+
+var GameObject = require('./GameObject');
+var Vector2D = require('../lib/Vector2D');
+var Globals = require('../lib/Globals');
+
+const DIAG_ACCEL_FACTOR = Math.cos(Math.PI/4);
+
+class Player extends GameObject {
+	constructor(velocity, position, color) {
+		super(position, 40, color);
+
+		this.velocity = velocity;
+	}
+}
+
+module.exports = Player;
+
+},{"../lib/Globals":148,"../lib/Vector2D":151,"./GameObject":156}],161:[function(require,module,exports){
+'use strict';
+
+var GameObject = require('./GameObject');
+var Vector2D = require('../lib/Vector2D');
+
+class Weapon extends GameObject {
+	constructor(name, distanceFromPlayer, size, color, outlineColor = 'rgba(80,80,80,1)') {
+		super(new Vector2D(distanceFromPlayer, -size/2), size, color);
+		this.name = name;
+		this.distanceFromPlayer = distanceFromPlayer;
+		this.outlineColor = outlineColor;
+	}
+}
+
+module.exports = Weapon;
+
+},{"../lib/Vector2D":151,"./GameObject":156}]},{},[147]);

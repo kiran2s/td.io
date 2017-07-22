@@ -1,7 +1,7 @@
 var InputProcessing = require('../shared/InputProcessing');
 var ServerWeapon = require('./ServerWeapon');
 var ServerPlayer = require('./ServerPlayer');
-var ServerNode = require('./ServerNode');
+var ServerBaseNode = require('./ServerBaseNode');
 var uuid = require('node-uuid');
 var Vector2D = require('../lib/Vector2D');
 
@@ -66,9 +66,9 @@ var processBaseInput = function(input, player, gamestate){
 	for (let i in input.keysClicked){
 		switch (i) {
 				case 'F':
-				if (player.selectedNode !== null && 
-					player.selectedNode.isHealthy())
-					gamestate.deleteBranch(player.selectedNode, player.id);
+				if (player.selectedBaseNode !== null && 
+					player.selectedBaseNode.isHealthy())
+					gamestate.deleteBranch(player.selectedBaseNode, player.id);
 		}
 	}
 
@@ -80,7 +80,7 @@ var processBaseInput = function(input, player, gamestate){
     			height: 100
 		}
 		
-		let nodeIntersectList = gamestate.spatialHash.query(nodeRange, function(item) { return item instanceof ServerNode; });
+		let nodeIntersectList = gamestate.spatialHash.query(nodeRange, function(item) { return item instanceof ServerBaseNode; });
 		
 		let cursorRange ={
    				x: input.mousePosition.x,
@@ -88,19 +88,19 @@ var processBaseInput = function(input, player, gamestate){
     			width: 1,
     			height: 1
 		}
-		let cursorIntersectList = gamestate.spatialHash.query(cursorRange, function(item) { return (item instanceof ServerNode && item.ownerID === player.id); });
+		let cursorIntersectList = gamestate.spatialHash.query(cursorRange, function(item) { return (item instanceof ServerBaseNode && item.ownerID === player.id); });
 		
 		if (cursorIntersectList.length > 0){
-			if (player.selectedNode === cursorIntersectList[0])
-				player.setSelectedNode(null);
-			else player.setSelectedNode(cursorIntersectList[0]);
+			if (player.selectedBaseNode === cursorIntersectList[0])
+				player.setSelectedBaseNode(null);
+			else player.setSelectedBaseNode(cursorIntersectList[0]);
 		}
 
 		else if (nodeIntersectList.length === 0){
 			if (player.base === null)
-				gamestate.addNode(new Vector2D(input.mousePosition.x, input.mousePosition.y), player);
-			else if (player.selectedNode !== null)
-				gamestate.addNode(new Vector2D(input.mousePosition.x, input.mousePosition.y), player);
+				gamestate.addBaseNode(new Vector2D(input.mousePosition.x, input.mousePosition.y), player);
+			else if (player.selectedBaseNode !== null)
+				gamestate.addBaseNode(new Vector2D(input.mousePosition.x, input.mousePosition.y), player);
 		}
 	}
 };

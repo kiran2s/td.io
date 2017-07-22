@@ -1,17 +1,18 @@
 'use strict';
 
-var Node = require('../shared/Node');
+var BaseNode = require('../shared/BaseNode');
 var Vector2D = require('../lib/Vector2D');
 var Globals = require('../lib/Globals');
 var HealthBar = require('./HealthBar');
 
 
-class ClientNode extends Node{
-	constructor(position, parent, children, radius, health, color, outlineColor, id) {
-		super(new Vector2D(position.x, position.y), parent, children, radius, health, color, outlineColor, id);
+class ClientBaseNode extends BaseNode{
+	constructor(ownerID, position, parent, children, radius, health, color, outlineColor, id) {
+		super(ownerID, new Vector2D(position.x, position.y), parent, children, radius, health, color, outlineColor, id);
 		var _children = [];
 		for (let i in this.children){
-			_children.push(new ClientNode(this.children[i].position, //recursively generate all child Nodes
+			_children.push(new ClientBaseNode(this.ownerID,
+										this.children[i].position, //recursively generate all child Nodes
 										this, 
 										this.children[i].children,
 										this.children[i].radius, 
@@ -55,7 +56,8 @@ class ClientNode extends Node{
 			if (nodeUpdate.children[k]._checked === undefined){
 				//console.log(k + " is not checked!");
 				//console.log(k);
-				this.children.push(new ClientNode(nodeUpdate.children[k].position, 
+				this.children.push(new ClientBaseNode(nodeUpdate.children[k].ownerID, 
+												nodeUpdate.children[k].position, 
 												this,
 												nodeUpdate.children[k].children,
 												nodeUpdate.children[k].radius,
@@ -64,7 +66,8 @@ class ClientNode extends Node{
 												nodeUpdate.children[k].outlineColor, 
 												nodeUpdate.children[k].id));
 			}
-			else delete nodeUpdate.children[k]._checked;
+			else
+				delete nodeUpdate.children[k]._checked;
 		}
 		//console.log("finished updating " + this.id);
 
@@ -74,7 +77,7 @@ class ClientNode extends Node{
 	draw(ctx, transformToCameraCoords) {  //iterative draw 
 		transformToCameraCoords();
 		var drawQueue = [this];
-		console.log(this.health);
+		//console.log(this.health);
 		while (drawQueue.length != 0){
 			transformToCameraCoords();
 			let item = drawQueue.shift();
@@ -138,4 +141,4 @@ class ClientNode extends Node{
 }
 
 
-module.exports = ClientNode;
+module.exports = ClientBaseNode;
