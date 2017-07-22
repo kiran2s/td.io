@@ -22376,8 +22376,6 @@ var Common = _dereq_('../core/Common');
 var Bounds = _dereq_('../geometry/Bounds');
 var Axes = _dereq_('../geometry/Axes');
 
-var HTMLElement = typeof HTMLElement === 'undefined' ? function(){} : HTMLElement;
-
 (function() {
 
     Body._inertiaScale = 4;
