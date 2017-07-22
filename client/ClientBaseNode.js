@@ -77,7 +77,7 @@ class ClientBaseNode extends BaseNode{
 	draw(ctx, transformToCameraCoords) {  //iterative draw 
 		transformToCameraCoords();
 		var drawQueue = [this];
-		console.log(this.health);
+		//console.log(this.health);
 		while (drawQueue.length != 0){
 			transformToCameraCoords();
 			let item = drawQueue.shift();

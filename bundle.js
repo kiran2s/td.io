@@ -21644,7 +21644,7 @@ class ClientBaseNode extends BaseNode{
 	draw(ctx, transformToCameraCoords) {  //iterative draw 
 		transformToCameraCoords();
 		var drawQueue = [this];
-		console.log(this.health);
+		//console.log(this.health);
 		while (drawQueue.length != 0){
 			transformToCameraCoords();
 			let item = drawQueue.shift();
@@ -22071,8 +22071,8 @@ module.exports = {
     DEGREES_360: 2*Math.PI,
     WORLD_WIDTH: 4000,
     WORLD_HEIGHT: 4000,
-    DEFAULT_HEIGHT: 576,
-    DEFAULT_WIDTH: 1024,
+    DEFAULT_HEIGHT: 720,
+    DEFAULT_WIDTH: 1280,
     DEFAULT_ASPECT: 16/9,
     DEFAULT_SCALE: 1,
 
@@ -22375,6 +22375,8 @@ var Render = _dereq_('../render/Render');
 var Common = _dereq_('../core/Common');
 var Bounds = _dereq_('../geometry/Bounds');
 var Axes = _dereq_('../geometry/Axes');
+
+var HTMLElement = typeof HTMLElement === 'undefined' ? function(){} : HTMLElement;
 
 (function() {
 
@@ -26713,6 +26715,7 @@ module.exports = Common;
      * @return {boolean} True if the object is a HTMLElement, otherwise false
      */
     Common.isElement = function(obj) {
+        if (typeof HTMLElement === 'undefined') return false;
         return obj instanceof HTMLElement;
     };
 

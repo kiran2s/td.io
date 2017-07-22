@@ -10,7 +10,6 @@ var Collectible = require('../shared/Collectible');
 var ServerCollectible = require('./ServerCollectible');
 var ServerBaseNode = require('./ServerBaseNode');
 var Vector2D = require('../lib/Vector2D');
-var SpatialHash = require('spatial-hash');
 var Globals = require('../lib/Globals');
 var Matter = require('matter-js');
 var Engine = Matter.Engine,
