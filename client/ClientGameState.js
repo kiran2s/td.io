@@ -17,8 +17,8 @@ class ClientGameState extends GameState {
     }
 	
 	draw(ctx, scale, otherPlayers, bullets, collectibles) {
-		let lengthFromCenter = scale*50*Math.pow((this.player.velocity.getLength()/this.player.maxSpeed), 2);
-		let displacementFromCenter = new Vector2D().copy(this.player.velocity).setLength(lengthFromCenter); //displacement is a vector in the same direction as velocity, but length = length(velocity)^2 *50
+		let lengthFromCenter = scale*50*Math.pow((this.player.velocity.getLength() / this.player.maxSpeed), 2);
+		let displacementFromCenter = new Vector2D().copy(this.player.velocity).setLength(lengthFromCenter); //displacement is a vector in the same direction as velocity, but length = length(velocity)^2 * 50
 
 		this.canvasPlayerPosition.x = this.canvas.width/2 + displacementFromCenter.x; //secret sauce for camera movement
 		this.canvasPlayerPosition.y = this.canvas.height/2 + displacementFromCenter.y; //secret sauce for camera movement

@@ -3,7 +3,6 @@
 var Player = require('./Player');
 var Bullet = require('./Bullet');
 var Collectible = require('./Collectible');
-var underscore = require('underscore');
 
 class GameStateUpdate {
     constructor(sequenceNumber, player, otherplayers, bullets, collectibles, serverTime) {

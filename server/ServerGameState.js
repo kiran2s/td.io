@@ -37,8 +37,9 @@ class ServerGameState extends GameState {
 	}
 
 	deletePlayer(id) {
-		if (this.players[id].base !== null)
-			this.deleteBranch(this.players[id].base, id);
+		let playerBase = this.players[id].base;
+		if (playerBase !== null)
+			this.deleteBranch(playerBase, id);
 		this.deleteGameObject(this.players, id);
 	}
 
@@ -59,7 +60,6 @@ class ServerGameState extends GameState {
 	deleteBranch(node, playerID){
 		this._deleteBranch(node);
 		this.players[playerID].deleteBranch(node);
-		
 	}
 
 	_deleteBranch(node){

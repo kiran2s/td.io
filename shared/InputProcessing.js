@@ -19,7 +19,7 @@ var convertToOrientation = function(direction) {
 	}
 };
 
-var processMovementInput = function(input, player){
+var processMovementInput = function(input, player) {
 	let accelerationVec = new Vector2D(0, 0);
 	let acceleration = player.acceleration;
 
@@ -72,15 +72,15 @@ var processMovementInput = function(input, player){
 };
 
 
-var processWeaponInput = function(input, player){
+var processWeaponInput = function(input, player) {
 
 };
 
-var processBaseInput = function(input, player){
+var processBaseInput = function(input, player) {
 
 };
 
-var processInput = function(input, player){
+var processInput = function(input, player) {
 	processMovementInput(input, player);
 	processWeaponInput(input, player);
 	processBaseInput(input, player);

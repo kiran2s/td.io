@@ -97,9 +97,7 @@ var processBaseInput = function(input, player, gamestate){
 		}
 
 		else if (nodeIntersectList.length === 0){
-			if (player.base === null)
-				gamestate.addBaseNode(new Vector2D(input.mousePosition.x, input.mousePosition.y), player);
-			else if (player.selectedBaseNode !== null)
+			if (player.base === null || player.selectedBaseNode !== null)
 				gamestate.addBaseNode(new Vector2D(input.mousePosition.x, input.mousePosition.y), player);
 		}
 	}

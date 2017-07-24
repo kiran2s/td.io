@@ -4,7 +4,8 @@ var GameObject = require('./GameObject');
 var uuid = require('node-uuid');
 
 class BaseNode extends GameObject{
-	constructor(ownerID, position, parent, children, radius, health, color, outlineColor, id = uuid(), maxChildren = 2, maxLengthToChildren = 500, minLengthToChildren = 0) {
+	constructor(position, parent, children, radius, health, color, outlineColor, 
+				id = uuid(), maxChildren = 2, maxLengthToChildren = 500, minLengthToChildren = 0) {
 		super(position, radius*2, color);
 		this.radius = radius; 
 		this.id = id;
@@ -20,13 +21,8 @@ class BaseNode extends GameObject{
 			this.distanceFromRoot = 0;
 			this.maxChildren = 3;
 		}
-		else this.distanceFromRoot = parent.distanceFromRoot + 1;
-		this.body = Bodies.circle(position.x, position.y, radius, {isStatic: true});
-		this.position = this.body.position;
-		// Body.setVelocity(this.body, velocity);
-		// this.velocity = this.body.velocity;
-		this.ownerID = ownerID;
-
+		else
+			this.distanceFromRoot = parent.distanceFromRoot + 1;
 	}
 
 	addParent(node){
@@ -51,11 +47,13 @@ class BaseNode extends GameObject{
 	}
 
 	isHealthy(){
+		if (this.health !== 100)
+			return false;
 		for (let i = 0; i<this.children.length; i++){
 			if (this.children[i].isHealthy() === false)
 				return false;
 		}
-		return this.health === 100;
+		return true;
 	}
 
 	// findBaseNode(rt, id){
@@ -68,7 +66,7 @@ class BaseNode extends GameObject{
 	delete(){
 		if (this.parent !== null){
 			let children = this.parent.children;
-			for(let i = 0; children.length; i++){
+			for(let i = 0; i < children.length; i++){
 				if (children[i] === this){
 					this.parent.removeChild(i);
 					break;

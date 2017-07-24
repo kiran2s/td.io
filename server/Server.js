@@ -80,7 +80,8 @@ class Server {
 			'update',
 			//adds to updates list, maintaining order by sequence number
 			function(inputUpdate) {
-				if (inputUpdate.sequenceNumber < socketState.lastProcessedSequenceNumber) return; //older than last processed sequence number.
+				if (inputUpdate.sequenceNumber < socketState.lastProcessedSequenceNumber)
+					return; //older than last processed sequence number.
 				
 				let currTime = Date.now();
 				// Verify that timestamp falls within reasonable range

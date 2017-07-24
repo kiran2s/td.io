@@ -7,12 +7,13 @@ var Globals = require('../lib/Globals');
 var underscore = require('underscore');
 
 class ServerBaseNode extends BaseNode {
-	constructor(ownerID, position, parent, children, radius = 50, health = 100, color = "red", outlineColor = 'rgba(80,80,80,1)') {
-		super(ownerID, position, parent, children, radius, health, color, outlineColor);
+	constructor(ownerID, velocity, position, parent, children, radius = 50, health = 100, color = "red", outlineColor = 'rgba(80,80,80,1)') {
+		super(position, parent, children, radius, health, color, outlineColor);
 		Collidable.call(this);
 		var _children = [];
 		for (var i = 0; i<this.children.length; i++){
 			_children.push(new ServerBaseNode(ownerID,
+										this.children[i].velocity,
 										this.children[i].position, //recursively generate all child ServerBaseNodes
 										this, 
 										this.children[i].children,
@@ -21,13 +22,14 @@ class ServerBaseNode extends BaseNode {
 										this.children[i].color, 
 										this.children[i].outlineColor));
 		}
+		this.ownerID = ownerID;
 		this.children = _children;
+		this.velocity = velocity;
 		this._copy = null;
-		this.body.object = this;
 	}
 
 	getUpdateProperties(fullUpdate) { 
-		if (fullUpdate===false) 
+		if (fullUpdate === false) 
 			return this.getModifiedUpdateProperties();
 		else 
 			return this.getFullUpdateProperties();	
@@ -39,8 +41,7 @@ class ServerBaseNode extends BaseNode {
 			_children[this.children[i].id] = this.children[i].getFullUpdateProperties();
 		}
 
-		return {
-			ownerID: this.ownerID,
+		this._copy = {
 			position: this.position,
 			radius: this.radius,
 			health: this.health,
@@ -49,6 +50,7 @@ class ServerBaseNode extends BaseNode {
 			children: _children,
 			id: this.id
 		};
+		return this._copy;
 	}
 
 	getModifiedUpdateProperties() { 
@@ -59,8 +61,7 @@ class ServerBaseNode extends BaseNode {
 
 		if (this._copy === null){
 			this._copy = {
-				ownerID: this.ownerID,
-				position: Globals.clone(this.position),
+				position: this.position,
 				radius: this.radius,
 				health: this.health,
 				color: this.color,
@@ -70,13 +71,12 @@ class ServerBaseNode extends BaseNode {
 			};
 			return this._copy;
 		}
-
 		else {
 			let update = {};
 			for (let i in this._copy){
 				if (i !== 'children' && i !== 'id' && !underscore.isEqual(this._copy[i], this[i])){
-					this._copy[i] = Globals.clone(this[i]);
-					update[i] = Globals.clone(this[i]);
+					this._copy[i] = this[i];
+					update[i] = this[i];
 				}
 			}
 			update.children = _children;
@@ -90,10 +90,10 @@ class ServerBaseNode extends BaseNode {
 		this._update(displacement);
 	}
 
-
 	_update(displacement){
 		this.position.add(displacement);
-		for (var i = 0; i<this.children.length; i++){
+		this.updateRange();
+		for (var i = 0; i < this.children.length; i++){
 			this.children[i]._update(displacement);
 		}
 	}

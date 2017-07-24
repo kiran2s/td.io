@@ -21115,7 +21115,6 @@ class Client {
 		this.ctx = this.canvas.getContext('2d');
 		this.scaleCanvas();
 
-
 		if (this.gamestate === undefined) {
 			this.gamestate = null;
 		}
@@ -21142,10 +21141,10 @@ class Client {
 		this.canvas.height = window.innerHeight;
 
 		let aspect = this.canvas.width / this.canvas.height;
-		if (aspect < Globals.DEFAULT_ASPECT){
+		if (aspect < Globals.DEFAULT_ASPECT) {
 			this.scale = this.canvas.height / Globals.DEFAULT_HEIGHT;
 		}
-		else{
+		else {
 			this.scale = this.canvas.width / Globals.DEFAULT_WIDTH;
 		}
 	}
@@ -21568,14 +21567,12 @@ var Vector2D = require('../lib/Vector2D');
 var Globals = require('../lib/Globals');
 var HealthBar = require('./HealthBar');
 
-
 class ClientBaseNode extends BaseNode{
-	constructor(ownerID, position, parent, children, radius, health, color, outlineColor, id) {
-		super(ownerID, new Vector2D(position.x, position.y), parent, children, radius, health, color, outlineColor, id);
+	constructor(position, parent, children, radius, health, color, outlineColor, id) {
+		super(new Vector2D(position.x, position.y), parent, children, radius, health, color, outlineColor, id);
 		var _children = [];
 		for (let i in this.children){
-			_children.push(new ClientBaseNode(this.ownerID,
-										this.children[i].position, //recursively generate all child Nodes
+			_children.push(new ClientBaseNode(this.children[i].position, //recursively generate all child Nodes
 										this, 
 										this.children[i].children,
 										this.children[i].radius, 
@@ -21619,8 +21616,7 @@ class ClientBaseNode extends BaseNode{
 			if (nodeUpdate.children[k]._checked === undefined){
 				//console.log(k + " is not checked!");
 				//console.log(k);
-				this.children.push(new ClientBaseNode(nodeUpdate.children[k].ownerID, 
-												nodeUpdate.children[k].position, 
+				this.children.push(new ClientBaseNode(nodeUpdate.children[k].position, 
 												this,
 												nodeUpdate.children[k].children,
 												nodeUpdate.children[k].radius,
@@ -21635,7 +21631,6 @@ class ClientBaseNode extends BaseNode{
 		//console.log("finished updating " + this.id);
 
 	}
-
 
 	draw(ctx, transformToCameraCoords) {  //iterative draw 
 		transformToCameraCoords();
@@ -21675,7 +21670,7 @@ class ClientBaseNode extends BaseNode{
 	// 	for (var i = 0; i < this.children.length; i++){
 	// 		transformToCameraCoords();
 	// 		ctx.beginPath();
- //        	ctx.moveTo(this.position.x, this.position.y);
+	//      ctx.moveTo(this.position.x, this.position.y);
 	// 		ctx.lineTo(this.children[i].position.x, this.children[i].position.y);
 	// 		ctx.strokeStyle = 'rgba(80,80,80,1)';
 	// 		ctx.lineWidth = 3;
@@ -21703,8 +21698,8 @@ class ClientBaseNode extends BaseNode{
 
 }
 
-
 module.exports = ClientBaseNode;
+
 },{"../lib/Globals":148,"../lib/Vector2D":151,"../shared/BaseNode":153,"./HealthBar":145}],140:[function(require,module,exports){
 'use strict';
 
@@ -21794,8 +21789,8 @@ class ClientGameState extends GameState {
     }
 	
 	draw(ctx, scale, otherPlayers, bullets, collectibles) {
-		let lengthFromCenter = scale*50*Math.pow((this.player.velocity.getLength()/this.player.maxSpeed), 2);
-		let displacementFromCenter = new Vector2D().copy(this.player.velocity).setLength(lengthFromCenter); //displacement is a vector in the same direction as velocity, but length = length(velocity)^2 *50
+		let lengthFromCenter = scale*50*Math.pow((this.player.velocity.getLength() / this.player.maxSpeed), 2);
+		let displacementFromCenter = new Vector2D().copy(this.player.velocity).setLength(lengthFromCenter); //displacement is a vector in the same direction as velocity, but length = length(velocity)^2 * 50
 
 		this.canvasPlayerPosition.x = this.canvas.width/2 + displacementFromCenter.x; //secret sauce for camera movement
 		this.canvasPlayerPosition.y = this.canvas.height/2 + displacementFromCenter.y; //secret sauce for camera movement
@@ -22018,7 +22013,8 @@ class OtherPlayer extends GameObject {
         this.outlineColor = outlineColor;
         if (base !== null)
 			this.base = new ClientBaseNode(base.position, null, base.children, base.radius, base.health, base.color, base.outlineColor, base.id);
-		else this.base = null;
+		else
+			this.base = null;
 		this.healthBar = new HealthBar(new Vector2D(0, this.radius + 12), this.radius * 2.5);
     }
 
@@ -22596,7 +22592,8 @@ var GameObject = require('./GameObject');
 var uuid = require('node-uuid');
 
 class BaseNode extends GameObject{
-	constructor(ownerID, position, parent, children, radius, health, color, outlineColor, id = uuid(), maxChildren = 2, maxLengthToChildren = 500, minLengthToChildren = 0) {
+	constructor(position, parent, children, radius, health, color, outlineColor, 
+				id = uuid(), maxChildren = 2, maxLengthToChildren = 500, minLengthToChildren = 0) {
 		super(position, radius*2, color);
 		this.radius = radius; 
 		this.id = id;
@@ -22612,13 +22609,8 @@ class BaseNode extends GameObject{
 			this.distanceFromRoot = 0;
 			this.maxChildren = 3;
 		}
-		else this.distanceFromRoot = parent.distanceFromRoot + 1;
-		this.body = Bodies.circle(position.x, position.y, radius, {isStatic: true});
-		this.position = this.body.position;
-		// Body.setVelocity(this.body, velocity);
-		// this.velocity = this.body.velocity;
-		this.ownerID = ownerID;
-
+		else
+			this.distanceFromRoot = parent.distanceFromRoot + 1;
 	}
 
 	addParent(node){
@@ -22643,11 +22635,13 @@ class BaseNode extends GameObject{
 	}
 
 	isHealthy(){
+		if (this.health !== 100)
+			return false;
 		for (let i = 0; i<this.children.length; i++){
 			if (this.children[i].isHealthy() === false)
 				return false;
 		}
-		return this.health === 100;
+		return true;
 	}
 
 	// findBaseNode(rt, id){
@@ -22660,7 +22654,7 @@ class BaseNode extends GameObject{
 	delete(){
 		if (this.parent !== null){
 			let children = this.parent.children;
-			for(let i = 0; children.length; i++){
+			for(let i = 0; i < children.length; i++){
 				if (children[i] === this){
 					this.parent.removeChild(i);
 					break;
@@ -22672,6 +22666,7 @@ class BaseNode extends GameObject{
 }
 
 module.exports = BaseNode;
+
 },{"./GameObject":156,"node-uuid":152}],154:[function(require,module,exports){
 'use strict';
 
@@ -22766,7 +22761,7 @@ var convertToOrientation = function(direction) {
 	}
 };
 
-var processMovementInput = function(input, player){
+var processMovementInput = function(input, player) {
 	let accelerationVec = new Vector2D(0, 0);
 	let acceleration = player.acceleration;
 
@@ -22819,15 +22814,15 @@ var processMovementInput = function(input, player){
 };
 
 
-var processWeaponInput = function(input, player){
+var processWeaponInput = function(input, player) {
 
 };
 
-var processBaseInput = function(input, player){
+var processBaseInput = function(input, player) {
 
 };
 
-var processInput = function(input, player){
+var processInput = function(input, player) {
 	processMovementInput(input, player);
 	processWeaponInput(input, player);
 	processBaseInput(input, player);
@@ -22864,10 +22859,6 @@ module.exports = InputUpdate;
 'use strict';
 
 var GameObject = require('./GameObject');
-var Vector2D = require('../lib/Vector2D');
-var Globals = require('../lib/Globals');
-
-const DIAG_ACCEL_FACTOR = Math.cos(Math.PI/4);
 
 class Player extends GameObject {
 	constructor(velocity, position, color) {
@@ -22879,7 +22870,7 @@ class Player extends GameObject {
 
 module.exports = Player;
 
-},{"../lib/Globals":148,"../lib/Vector2D":151,"./GameObject":156}],161:[function(require,module,exports){
+},{"./GameObject":156}],161:[function(require,module,exports){
 'use strict';
 
 var GameObject = require('./GameObject');

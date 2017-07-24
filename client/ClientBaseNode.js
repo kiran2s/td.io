@@ -5,14 +5,12 @@ var Vector2D = require('../lib/Vector2D');
 var Globals = require('../lib/Globals');
 var HealthBar = require('./HealthBar');
 
-
 class ClientBaseNode extends BaseNode{
-	constructor(ownerID, position, parent, children, radius, health, color, outlineColor, id) {
-		super(ownerID, new Vector2D(position.x, position.y), parent, children, radius, health, color, outlineColor, id);
+	constructor(position, parent, children, radius, health, color, outlineColor, id) {
+		super(new Vector2D(position.x, position.y), parent, children, radius, health, color, outlineColor, id);
 		var _children = [];
 		for (let i in this.children){
-			_children.push(new ClientBaseNode(this.ownerID,
-										this.children[i].position, //recursively generate all child Nodes
+			_children.push(new ClientBaseNode(this.children[i].position, //recursively generate all child Nodes
 										this, 
 										this.children[i].children,
 										this.children[i].radius, 
@@ -56,8 +54,7 @@ class ClientBaseNode extends BaseNode{
 			if (nodeUpdate.children[k]._checked === undefined){
 				//console.log(k + " is not checked!");
 				//console.log(k);
-				this.children.push(new ClientBaseNode(nodeUpdate.children[k].ownerID, 
-												nodeUpdate.children[k].position, 
+				this.children.push(new ClientBaseNode(nodeUpdate.children[k].position, 
 												this,
 												nodeUpdate.children[k].children,
 												nodeUpdate.children[k].radius,
@@ -72,7 +69,6 @@ class ClientBaseNode extends BaseNode{
 		//console.log("finished updating " + this.id);
 
 	}
-
 
 	draw(ctx, transformToCameraCoords) {  //iterative draw 
 		transformToCameraCoords();
@@ -112,7 +108,7 @@ class ClientBaseNode extends BaseNode{
 	// 	for (var i = 0; i < this.children.length; i++){
 	// 		transformToCameraCoords();
 	// 		ctx.beginPath();
- //        	ctx.moveTo(this.position.x, this.position.y);
+	//      ctx.moveTo(this.position.x, this.position.y);
 	// 		ctx.lineTo(this.children[i].position.x, this.children[i].position.y);
 	// 		ctx.strokeStyle = 'rgba(80,80,80,1)';
 	// 		ctx.lineWidth = 3;
@@ -139,6 +135,5 @@ class ClientBaseNode extends BaseNode{
 	// }
 
 }
-
 
 module.exports = ClientBaseNode;

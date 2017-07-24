@@ -17,7 +17,8 @@ class OtherPlayer extends GameObject {
         this.outlineColor = outlineColor;
         if (base !== null)
 			this.base = new ClientBaseNode(base.position, null, base.children, base.radius, base.health, base.color, base.outlineColor, base.id);
-		else this.base = null;
+		else
+			this.base = null;
 		this.healthBar = new HealthBar(new Vector2D(0, this.radius + 12), this.radius * 2.5);
     }
 

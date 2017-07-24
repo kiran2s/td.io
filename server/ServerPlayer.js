@@ -28,7 +28,7 @@ class ServerPlayer extends Player {
 		this.damage = 100;
 		this.base = null; 
 		this.baseSize = 0;
-		this.selectedNode = null;
+		this.selectedBaseNode = null;
 	}
 
 	getUpdateProperties(liteVersion, fullUpdate) {
@@ -76,7 +76,7 @@ class ServerPlayer extends Player {
 			this.base = node; 
 			this.base.color = "blue";
 		}
-		if (this.selectedBaseNode !== null ){
+		if (this.selectedBaseNode !== null) {
 			let dist = new Vector2D().copy(this.selectedBaseNode.position).sub(position).getLength(); 
 			if (this.selectedBaseNode.maxChildren === this.selectedBaseNode.children.length ||
 				dist > this.selectedBaseNode.maxLengthToChildren ||
@@ -104,7 +104,7 @@ class ServerPlayer extends Player {
 		//console.log(this.baseSize);
 	}
 
-	setSelectedNode(node){
+	setSelectedBaseNode(node){
 		if (this.selectedBaseNode !== null){
 				this.selectedBaseNode.outlineColor = 'rgba(80,80,80,1)';
 				this.selectedBaseNode = null;

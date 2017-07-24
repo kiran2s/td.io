@@ -36,7 +36,6 @@ class Client {
 		this.ctx = this.canvas.getContext('2d');
 		this.scaleCanvas();
 
-
 		if (this.gamestate === undefined) {
 			this.gamestate = null;
 		}
@@ -63,10 +62,10 @@ class Client {
 		this.canvas.height = window.innerHeight;
 
 		let aspect = this.canvas.width / this.canvas.height;
-		if (aspect < Globals.DEFAULT_ASPECT){
+		if (aspect < Globals.DEFAULT_ASPECT) {
 			this.scale = this.canvas.height / Globals.DEFAULT_HEIGHT;
 		}
-		else{
+		else {
 			this.scale = this.canvas.width / Globals.DEFAULT_WIDTH;
 		}
 	}
