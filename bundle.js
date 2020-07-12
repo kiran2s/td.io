@@ -21239,7 +21239,7 @@ class Client {
 			if (this.gamestateReceived) {
 				this.ctx.fillStyle = "red";
 				this.ctx.font = '100px Arial';
-				let msg = "YOU DEAD";
+				let msg = "GET DEADED";
 				this.ctx.fillText(msg, this.canvas.width/2 - this.ctx.measureText(msg).width/2, this.canvas.height/2);
 				/*
 				this.ctx.font = '32px Arial';
@@ -22056,6 +22056,8 @@ var Client = require('./Client');
 new Client();
 
 },{"./Client":138}],148:[function(require,module,exports){
+'use strict';
+
 module.exports = {
     DEGREES_90: Math.PI/2,
     DEGREES_180: Math.PI,
@@ -22068,26 +22070,25 @@ module.exports = {
     DEFAULT_ASPECT: 16/9,
     DEFAULT_SCALE: 1,
 
-
     areObjectsSame: function(o1, o2) {
         return JSON.stringify(o1) === JSON.stringify(o2);
     },
 
     clone: function(obj) {
-	    if (null == obj || "object" != typeof obj) return obj;
+	    if (obj == null || typeof obj != "object") {
+            return obj;
+        }
 	    var copy = obj.constructor();
 	    for (var attr in obj) {
-	        if (obj.hasOwnProperty(attr)) copy[attr] = this.clone(obj[attr]);
+	        if (obj.hasOwnProperty(attr)) {
+                copy[attr] = this.clone(obj[attr]);
+            }
 	    }
 	    return copy;
 	}
 };
 
 },{}],149:[function(require,module,exports){
-/**
- * Author: Kiran Sivakumar
-*/
-
 'use strict';
 
 class MouseState {	
@@ -22107,41 +22108,45 @@ class MouseState {
 		this.x = event.clientX;
 		this.y = event.clientY;
 	}
-	
+
 	onMouseDown(event) {
 		event = event || window.event;
-		
-		if (event.button === MouseState.buttonCodes.left) {
-			this.isLeftButtonDown = true;
-		}
-		else if (event.button === MouseState.buttonCodes.scroll) {
-			this.isScrollButtonDown = true;
-		}
-		else if (event.button === MouseState.buttonCodes.right) {
-			this.isRightButtonDown = true;
+
+		switch(event.button) {
+			case (MouseState.buttonCodes.left):
+				this.isLeftButtonDown = true;
+				break;
+			case (MouseState.buttonCodes.scroll):
+				this.isScrollButtonDown = true;
+				break;
+			case (MouseState.buttonCodes.right):
+				this.isRightButtonDown = true;
+				break;
 		}
 	}
 	
 	onMouseUp(event) {
 		event = event || window.event;
-		
-		if (event.button === MouseState.buttonCodes.left) {
-			this.isLeftButtonDown = false;
-		}
-		else if (event.button === MouseState.buttonCodes.scroll) {
-			this.isScrollButtonDown = false;
-		}
-		else if (event.button === MouseState.buttonCodes.right) {
-			this.isRightButtonDown = false;
+
+		switch(event.button) {
+			case (MouseState.buttonCodes.left):
+				this.isLeftButtonDown = false;
+				break;
+			case (MouseState.buttonCodes.scroll):
+				this.isScrollButtonDown = false;
+				break;
+			case (MouseState.buttonCodes.right):
+				this.isRightButtonDown = false;
+				break;
 		}
 	}
 }
 
 MouseState.buttonCodes = {
-	left : 0,
-	scroll : 1,
-	right : 2
-};
+	left: 0,
+	scroll: 1,
+	right: 2
+}
 
 module.exports = MouseState;
 
@@ -22199,7 +22204,7 @@ THREEx.KeyboardState.prototype._onKeyChange	= function(event, pressed)
 	var keyCode		= event.keyCode;
 	this.keyCodes[keyCode]	= pressed;
 	
-	this.modifiers['shift']= event.shiftKey;
+	this.modifiers['shift'] = event.shiftKey;
 	this.modifiers['ctrl']	= event.ctrlKey;
 	this.modifiers['alt']	= event.altKey;
 	this.modifiers['meta']	= event.metaKey;
@@ -22232,10 +22237,6 @@ THREEx.KeyboardState.prototype.pressed	= function(keyDesc)
 module.exports = THREEx.KeyboardState;
 
 },{}],151:[function(require,module,exports){
-/**
- * Author: Kiran Sivakumar
-*/
-
 'use strict';
 
 class Vector2D {	
@@ -22266,7 +22267,7 @@ class Vector2D {
 			return this;
 		}
 		
-		this.mul(1/len);
+		this.div(len);
 		return this;
 	}
 	
@@ -22591,79 +22592,81 @@ module.exports = Vector2D;
 var GameObject = require('./GameObject');
 var uuid = require('node-uuid');
 
-class BaseNode extends GameObject{
-	constructor(position, parent, children, radius, health, color, outlineColor, 
-				id = uuid(), maxChildren = 2, maxLengthToChildren = 500, minLengthToChildren = 0) {
+class BaseNode extends GameObject {
+	constructor(position, parent, children, radius = 50, health = 100, color = "red", outlineColor = 'rgba(80,80,80,1)', id = uuid()) {
 		super(position, radius*2, color);
-		this.radius = radius; 
+		this.parent = parent;
+		this.children = children;
+		this.radius = radius;
+		this.health = health;
+		this.startingHealth = health;
+		this.outlineColor = outlineColor;
 		this.id = id;
-		this.health = health; 
-		//console.log("HEALTH IS "+this.health);
-		this.outlineColor = outlineColor; 
-		this.parent = parent; 
-		this.children = children; 
-		this.maxChildren = maxChildren;
-		this.maxLengthToChildren = maxLengthToChildren;
-		this.minLengthToChildren = minLengthToChildren;
-		if (parent === null){
+		this.maxChildren = BaseNode.maxChildren;
+		this.maxLengthToChildren = BaseNode.maxLengthToChildren;
+		this.minLengthToChildren = BaseNode.minLengthToChildren;
+		if (parent === null) {
+			// This is the root node.
 			this.distanceFromRoot = 0;
-			this.maxChildren = 3;
-		}
-		else
+			this.maxChildren = BaseNode.maxChildrenOfRoot;
+		} else {
 			this.distanceFromRoot = parent.distanceFromRoot + 1;
+		}
 	}
 
-	addParent(node){
+	addParent(node) {
 		this.parent = node;
 		this.distanceFromRoot = parent.distanceFromRoot + 1;
 	}
 
-	addChild(node){
+	addChild(node) {
+		if (this.children.length >= this.maxChildren) {
+			console.error("cannot add child to node that has max number of children (%d)", this.maxChildren);
+			return;
+		}
 		this.children.push(node);
 	}
 
-	removeChild(i){
-		this.children.splice(i,1);
+	removeChild(i) {
+		this.children.splice(i, 1);
 	}
 
-	getTreeSize(){
-		var size = 1;
-		for (let i = 0; i < this.children.length; i++){
+	getTreeSize() {
+		let size = 1;
+		for (let i = 0; i < this.children.length; i++) {
 			size += this.children[i].getTreeSize();
 		}
 		return size;
 	}
 
-	isHealthy(){
-		if (this.health !== 100)
+	isHealthy() {
+		if (this.health < this.startingHealth) {
 			return false;
-		for (let i = 0; i<this.children.length; i++){
-			if (this.children[i].isHealthy() === false)
+		}
+		for (let i = 0; i < this.children.length; i++) {
+			if (!this.children[i].isHealthy) {
 				return false;
+			}
 		}
 		return true;
 	}
 
-	// findBaseNode(rt, id){
-	// 	if (rt.id === id) return rt;
-	// 	for (var i = 0; i < rt.children.length; i++){
-	// 		findBaseNode(rt.children[i], id);
-	// 	}
-	// }
-
-	delete(){
-		if (this.parent !== null){
-			let children = this.parent.children;
-			for(let i = 0; i < children.length; i++){
-				if (children[i] === this){
+	delete() {
+		if (this.parent !== null) {
+			for (let i = 0; i < this.parent.children.length; i++) {
+				if (this.parent.children[i] === this) {
 					this.parent.removeChild(i);
-					break;
+					return;
 				}
 			}
 		}
-		//this.parent = null;
 	}
 }
+
+BaseNode.maxChildren = 2;
+BaseNode.maxChildrenOfRoot = 3;
+BaseNode.maxLengthToChildren = 500;
+BaseNode.minLengthToChildren = 0;
 
 module.exports = BaseNode;
 
@@ -22691,12 +22694,16 @@ var Globals = require('../lib/Globals');
 
 class Collectible extends GameObject {
 	constructor(position, health = 100) {
-		super(position, 20, 'rgba(255,192,0,1)');
+		super(position, Collectible.size, Collectible.color);
 		this.orientation = Math.random() * Globals.DEGREES_360;
 		this.health = health;
-		this.outlineColor = 'rgba(80,80,80,1)';
+		this.outlineColor = Collectible.outlineColor;
 	}
 }
+
+Collectible.size = 20;
+Collectible.color = 'rgba(255,192,0,1)';
+Collectible.outlineColor = 'rgba(80,80,80,1)'
 
 module.exports = Collectible;
 
@@ -22765,12 +22772,13 @@ var processMovementInput = function(input, player) {
 	let accelerationVec = new Vector2D(0, 0);
 	let acceleration = player.acceleration;
 
-	if (input.keysPressed.numDirKeysPressed === 2) 
+	if (input.keysPressed.numDirKeysPressed === 2) {
 		acceleration *= DIAG_ACCEL_FACTOR;
+	}
 
 	let none = true;
 	for (let i in input.keysPressed){
-		switch (i) {
+		switch(i) {
 			case 'W':
 				accelerationVec.y -= acceleration;
 				none = false;
@@ -22790,7 +22798,7 @@ var processMovementInput = function(input, player) {
 		}
 	}
 
-	if (none){
+	if (none) {
 		if (player.velocity.getLength() < player.minSpeed) {
 			player.velocity.set(0, 0);
 		}
@@ -22862,11 +22870,13 @@ var GameObject = require('./GameObject');
 
 class Player extends GameObject {
 	constructor(velocity, position, color) {
-		super(position, 40, color);
+		super(position, Player.size, color);
 
 		this.velocity = velocity;
 	}
 }
+
+Player.size = 40
 
 module.exports = Player;
 

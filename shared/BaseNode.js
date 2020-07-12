@@ -3,78 +3,80 @@
 var GameObject = require('./GameObject');
 var uuid = require('node-uuid');
 
-class BaseNode extends GameObject{
-	constructor(position, parent, children, radius, health, color, outlineColor, 
-				id = uuid(), maxChildren = 2, maxLengthToChildren = 500, minLengthToChildren = 0) {
+class BaseNode extends GameObject {
+	constructor(position, parent, children, radius = 50, health = 100, color = "red", outlineColor = 'rgba(80,80,80,1)', id = uuid()) {
 		super(position, radius*2, color);
-		this.radius = radius; 
+		this.parent = parent;
+		this.children = children;
+		this.radius = radius;
+		this.health = health;
+		this.startingHealth = health;
+		this.outlineColor = outlineColor;
 		this.id = id;
-		this.health = health; 
-		//console.log("HEALTH IS "+this.health);
-		this.outlineColor = outlineColor; 
-		this.parent = parent; 
-		this.children = children; 
-		this.maxChildren = maxChildren;
-		this.maxLengthToChildren = maxLengthToChildren;
-		this.minLengthToChildren = minLengthToChildren;
-		if (parent === null){
+		this.maxChildren = BaseNode.maxChildren;
+		this.maxLengthToChildren = BaseNode.maxLengthToChildren;
+		this.minLengthToChildren = BaseNode.minLengthToChildren;
+		if (parent === null) {
+			// This is the root node.
 			this.distanceFromRoot = 0;
-			this.maxChildren = 3;
-		}
-		else
+			this.maxChildren = BaseNode.maxChildrenOfRoot;
+		} else {
 			this.distanceFromRoot = parent.distanceFromRoot + 1;
+		}
 	}
 
-	addParent(node){
+	addParent(node) {
 		this.parent = node;
 		this.distanceFromRoot = parent.distanceFromRoot + 1;
 	}
 
-	addChild(node){
+	addChild(node) {
+		if (this.children.length >= this.maxChildren) {
+			console.error("cannot add child to node that has max number of children (%d)", this.maxChildren);
+			return;
+		}
 		this.children.push(node);
 	}
 
-	removeChild(i){
-		this.children.splice(i,1);
+	removeChild(i) {
+		this.children.splice(i, 1);
 	}
 
-	getTreeSize(){
-		var size = 1;
-		for (let i = 0; i < this.children.length; i++){
+	getTreeSize() {
+		let size = 1;
+		for (let i = 0; i < this.children.length; i++) {
 			size += this.children[i].getTreeSize();
 		}
 		return size;
 	}
 
-	isHealthy(){
-		if (this.health !== 100)
+	isHealthy() {
+		if (this.health < this.startingHealth) {
 			return false;
-		for (let i = 0; i<this.children.length; i++){
-			if (this.children[i].isHealthy() === false)
+		}
+		for (let i = 0; i < this.children.length; i++) {
+			if (!this.children[i].isHealthy) {
 				return false;
+			}
 		}
 		return true;
 	}
 
-	// findBaseNode(rt, id){
-	// 	if (rt.id === id) return rt;
-	// 	for (var i = 0; i < rt.children.length; i++){
-	// 		findBaseNode(rt.children[i], id);
-	// 	}
-	// }
-
-	delete(){
-		if (this.parent !== null){
-			let children = this.parent.children;
-			for(let i = 0; i < children.length; i++){
-				if (children[i] === this){
+	delete() {
+		if (this.parent !== null) {
+			for (let i = 0; i < this.parent.children.length; i++) {
+				if (this.parent.children[i] === this) {
 					this.parent.removeChild(i);
-					break;
+					return;
 				}
 			}
 		}
-		//this.parent = null;
 	}
 }
+
+BaseNode.maxChildren = 2;
+BaseNode.maxChildrenOfRoot = 3;
+BaseNode.maxLengthToChildren = 500;
+BaseNode.minLengthToChildren = 0;
 
 module.exports = BaseNode;

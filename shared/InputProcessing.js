@@ -23,12 +23,13 @@ var processMovementInput = function(input, player) {
 	let accelerationVec = new Vector2D(0, 0);
 	let acceleration = player.acceleration;
 
-	if (input.keysPressed.numDirKeysPressed === 2) 
+	if (input.keysPressed.numDirKeysPressed === 2) {
 		acceleration *= DIAG_ACCEL_FACTOR;
+	}
 
 	let none = true;
 	for (let i in input.keysPressed){
-		switch (i) {
+		switch(i) {
 			case 'W':
 				accelerationVec.y -= acceleration;
 				none = false;
@@ -48,7 +49,7 @@ var processMovementInput = function(input, player) {
 		}
 	}
 
-	if (none){
+	if (none) {
 		if (player.velocity.getLength() < player.minSpeed) {
 			player.velocity.set(0, 0);
 		}

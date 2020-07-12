@@ -13,8 +13,9 @@ class GameStateUpdate {
         this.collectibles = {};
         this.serverTime = serverTime;
 
-        if (player !== null && player !== undefined) { //if player is deleted, it will generally be undefined.
-            this.player = player.getUpdateProperties(false, false); //not liteVersion, not fullUpdate (only modified)
+        if (player !== null && player !== undefined) {
+            // Player is not deleted, so get its light version full update properties.
+            this.player = player.getUpdateProperties(false, false);
         }
 
         let fillWithUpdateProperties = function(updates, gameObjects, GameObjectType, liteVersion = false, fullUpdate = false) {
@@ -26,13 +27,12 @@ class GameStateUpdate {
             }
         }
 
-        fillWithUpdateProperties(this.otherPlayers, otherplayers, Player, true, true); //liteVersion, fullVersion
+        fillWithUpdateProperties(this.otherPlayers, otherplayers, Player, true, true);
         fillWithUpdateProperties(this.bullets, bullets, Bullet);
         fillWithUpdateProperties(this.collectibles, collectibles, Collectible);
-        if (player !== null && player !== undefined){
+        if (player !== null && player !== undefined) {
             delete this.otherPlayers[player.id];
         }
-        // console.log(otherplayers[player.id]!==undefined);
     }
 }
 

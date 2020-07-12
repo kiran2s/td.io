@@ -23,7 +23,6 @@ function Collidable(shape) {
 		}
 	}
 
-
 	this.shape = shape 
 
     /*

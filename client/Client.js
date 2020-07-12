@@ -160,7 +160,7 @@ class Client {
 			if (this.gamestateReceived) {
 				this.ctx.fillStyle = "red";
 				this.ctx.font = '100px Arial';
-				let msg = "YOU DEAD";
+				let msg = "GET DEADED";
 				this.ctx.fillText(msg, this.canvas.width/2 - this.ctx.measureText(msg).width/2, this.canvas.height/2);
 				/*
 				this.ctx.font = '32px Arial';
